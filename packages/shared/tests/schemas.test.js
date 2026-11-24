@@ -4,6 +4,8 @@ import {
   BikeFilterQuerySchema,
   CalibrationDataSchema,
   CartAddItemSchema,
+  CartAddRequestSchema,
+  CheckoutOrderSchema,
   CreateOrderSchema,
   CreateTestRideSchema,
   MediaPresignSchema,
@@ -272,5 +274,34 @@ describe('@dirtfit/shared strict Zod schemas & RFC 7807 builders', () => {
     expect(parsedFilter.streetLegal).toBe(false);
     expect(parsedFilter.heightCm).toBe(168);
     expect(parsedFilter.bootType).toBe('MX_BOOTS');
+
+    expect(
+      CartAddRequestSchema.safeParse({
+        bikeId: VALID_UUID,
+        accessoryIds: [VALID_UUID_2],
+        quantity: 1,
+      }).success
+    ).toBe(true);
+
+    expect(
+      CartAddRequestSchema.safeParse({
+        itemType: 'BIKE',
+        bikeId: VALID_UUID,
+        accessoryIds: [VALID_UUID_2],
+        accessoryId: VALID_UUID_2,
+      }).success
+    ).toBe(false);
+
+    expect(
+      CheckoutOrderSchema.safeParse({
+        shippingAddress: {
+          recipientName: 'Nguyen Van B',
+          phone: '0901234567',
+          province: 'Ho Chi Minh',
+          district: 'Thu Duc',
+          streetAddress: '468 Xa Lo Ha Noi',
+        },
+      }).success
+    ).toBe(true);
   });
 });

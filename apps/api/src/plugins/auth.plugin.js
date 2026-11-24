@@ -88,6 +88,15 @@ export default fp(
       };
     });
 
+    app.decorate('optionalAuth', async function optionalAuth(request) {
+      const authHeader = request.headers.authorization;
+      if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+        await app.requireAuth(request);
+        return;
+      }
+      request.authUser = null;
+    });
+
     app.decorate('requireRoles', function requireRoles(...allowedRoles) {
       return async function enforceRoles(request) {
         if (!request.authUser) {

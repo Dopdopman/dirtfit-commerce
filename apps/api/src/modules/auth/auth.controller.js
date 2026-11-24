@@ -1,4 +1,5 @@
 import { sendSuccess } from '../../common/http/envelope.js';
+import { mergeGuestCartToUser } from '../cart/cart.repository.js';
 import {
   getAuthenticatedMe,
   loginUser,
@@ -9,6 +10,7 @@ import {
 } from './auth.service.js';
 
 export const REFRESH_COOKIE_NAME = 'df_refresh_token';
+const GUEST_CART_COOKIE_NAME = 'df_guest_cart';
 
 /**
  * Extract request metadata for token tracking and audit logs.
@@ -80,6 +82,11 @@ export async function registerHandler(request, reply) {
  */
 export async function loginHandler(request, reply) {
   const result = await loginUser(request.server, request.body, buildRequestContext(request));
+  const guestCartToken = request.cookies?.[GUEST_CART_COOKIE_NAME];
+  if (typeof guestCartToken === 'string' && guestCartToken.length > 0) {
+    await mergeGuestCartToUser(request.server.prisma, guestCartToken, result.user.id);
+    reply.clearCookie(GUEST_CART_COOKIE_NAME, { path: '/api/v1' });
+  }
   setRefreshCookie(reply, result.rawRefreshToken, request.server.env);
   return sendSuccess(reply, { user: result.user, accessToken: result.accessToken });
 }

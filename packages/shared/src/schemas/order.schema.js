@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ORDER_STATUSES, ORDER_TYPES, PAYMENT_METHODS } from '../enums.js';
-import { UuidSchema } from './common.schema.js';
+import { PaginationQuerySchema, UuidSchema } from './common.schema.js';
 import { RiderProfileInputSchema } from './ergonomics.schema.js';
 
 export const ShippingAddressSchema = z
@@ -46,8 +46,48 @@ export const UpdateOrderStatusSchema = z
 
 export const MockWebhookSimulateSchema = z
   .object({
-    orderId: UuidSchema,
+    orderId: UuidSchema.optional(),
+    orderNumber: z.string().trim().min(4).max(32).optional(),
     outcome: z.enum(['SUCCEEDED', 'FAILED']).default('SUCCEEDED'),
     providerTxId: z.string().trim().min(4).max(128).optional(),
+    amountVnd: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .refine((data) => Boolean(data.orderId || data.orderNumber), {
+    message: 'Either orderId or orderNumber is required',
+    path: ['orderId'],
+  });
+
+export const CheckoutOrderSchema = z
+  .object({
+    orderType: z.nativeEnum(ORDER_TYPES).optional(),
+    paymentMethod: z.nativeEnum(PAYMENT_METHODS).optional(),
+    shippingAddress: ShippingAddressSchema,
+    riderFitSnapshot: RiderProfileInputSchema.optional(),
+    customerNote: z.string().trim().max(500).optional(),
+    returnUrl: z.string().url().optional(),
+    cancelUrl: z.string().url().optional(),
+  })
+  .strict();
+
+export const OrderListQuerySchema = PaginationQuerySchema.extend({
+  status: z.nativeEnum(ORDER_STATUSES).optional(),
+  orderType: z.nativeEnum(ORDER_TYPES).optional(),
+  orderNumber: z.string().trim().max(32).optional(),
+}).strict();
+
+export const CancelOrderSchema = z
+  .object({
+    reason: z.string().trim().max(300).optional(),
+  })
+  .strict();
+
+export const PayOSWebhookPayloadSchema = z
+  .object({
+    code: z.string(),
+    desc: z.string().optional(),
+    success: z.boolean().optional(),
+    data: z.record(z.unknown()),
+    signature: z.string().min(16),
   })
   .strict();

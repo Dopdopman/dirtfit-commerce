@@ -49,6 +49,11 @@ const EnvSchema = z
 
     PAYMENT_DEFAULT_PROVIDER: z.enum(['MOCK', 'PAYOS', 'VNPAY', 'STRIPE', 'COD']).default('MOCK'),
     ENABLE_MOCK_PAYMENT: BooleanStringSchema.default(true),
+    MOCK_PAYMENT_WEBHOOK_SECRET: z.string().min(16).default('replace-with-local-mock-secret'),
+    PAYOS_CLIENT_ID: z.string().optional(),
+    PAYOS_API_KEY: z.string().optional(),
+    PAYOS_CHECKSUM_KEY: z.string().min(16).default('your-payos-checksum-key-dev-only'),
+    RESERVATION_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(15),
 
     STORAGE_DRIVER: z.enum(['local', 'r2']).default('local'),
     R2_ACCOUNT_ID: z.string().optional(),
@@ -63,6 +68,13 @@ const EnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['ENABLE_MOCK_PAYMENT'],
         message: 'ENABLE_MOCK_PAYMENT must be false in production',
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.PAYMENT_DEFAULT_PROVIDER === 'MOCK') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['PAYMENT_DEFAULT_PROVIDER'],
+        message: 'PAYMENT_DEFAULT_PROVIDER cannot be MOCK in production',
       });
     }
     if (env.NODE_ENV === 'production' && env.STORAGE_DRIVER === 'local') {
@@ -140,6 +152,11 @@ export function loadEnv(overrides = {}) {
     RATE_LIMIT_AUTH_MAX: rawSource.RATE_LIMIT_AUTH_MAX,
     PAYMENT_DEFAULT_PROVIDER: rawSource.PAYMENT_DEFAULT_PROVIDER,
     ENABLE_MOCK_PAYMENT: rawSource.ENABLE_MOCK_PAYMENT,
+    MOCK_PAYMENT_WEBHOOK_SECRET: rawSource.MOCK_PAYMENT_WEBHOOK_SECRET,
+    PAYOS_CLIENT_ID: rawSource.PAYOS_CLIENT_ID,
+    PAYOS_API_KEY: rawSource.PAYOS_API_KEY,
+    PAYOS_CHECKSUM_KEY: rawSource.PAYOS_CHECKSUM_KEY,
+    RESERVATION_TTL_MINUTES: rawSource.RESERVATION_TTL_MINUTES,
     STORAGE_DRIVER: rawSource.STORAGE_DRIVER,
     R2_ACCOUNT_ID: rawSource.R2_ACCOUNT_ID,
     R2_ACCESS_KEY_ID: rawSource.R2_ACCESS_KEY_ID,

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SHOWROOM_CODES, TEST_RIDE_STATUSES, TEST_RIDE_TIME_SLOTS } from '../enums.js';
-import { UuidSchema } from './common.schema.js';
+import { PaginationQuerySchema, UuidSchema } from './common.schema.js';
 import { BikeModificationsInputSchema, RiderProfileInputSchema } from './ergonomics.schema.js';
 
 const ShowroomEnum = z.nativeEnum(SHOWROOM_CODES);
@@ -32,6 +32,19 @@ export const AdminUpdateTestRideSchema = z
   .object({
     status: z.nativeEnum(TEST_RIDE_STATUSES),
     assignedStaffId: UuidSchema.nullable().optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+export const AdminTestRideFilterQuerySchema = PaginationQuerySchema.extend({
+  status: z.nativeEnum(TEST_RIDE_STATUSES).optional(),
+  showroomCode: ShowroomEnum.optional(),
+  bikeId: UuidSchema.optional(),
+  date: DateIsoSchema.optional(),
+}).strict();
+
+export const CancelTestRideSchema = z
+  .object({
     notes: z.string().trim().max(500).optional(),
   })
   .strict();

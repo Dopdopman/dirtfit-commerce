@@ -112,11 +112,11 @@ flowchart TD
 - **Key Deliverables:**
   - Modules: `cart` (Guest cookie + login merge + `/bundles`), `orders` (Idempotency middleware, sorted `SELECT ... FOR UPDATE`, **Lazy Expiration** for expired reservations inside checkout & availability checks, Order State Machine, Deposit & COD rules), `payments` (**`PayOSAdapter` production default**, **`MockPaymentAdapter` local/test/CI default** + `POST /api/v1/payments/mock/simulate-webhook`, `CodAdapter`, optional `VNPayAdapter`/`StripeAdapter`), `test-rides` (3 showrooms + slot uniqueness), `common/email` (Resend), `common/jobs` (secondary sweeper + `/internal/cron/expire-reservations`).
 - **Definition of Done (DoD):**
-  - [ ] **Concurrency Race Condition Test:** 10 parallel `POST /api/v1/orders` calls for 1 remaining bike → exactly 1 `201`, 9 `409 INSUFFICIENT_STOCK`, zero negative inventory.
-  - [ ] **Lazy Expiration Test:** An expired reservation (`expiresAt < NOW()`) is reclaimed inline by a new checkout without running cron.
-  - [ ] Idempotency Replay & Payload Mismatch (`422`) tests pass 100%.
-  - [ ] `MockPaymentAdapter` + `simulate-webhook`, signature forgery (`401`), and `providerTxId` replay tests pass 100%.
-  - [ ] COD is strictly rejected when cart includes `BIKE` or accessory total exceeds 20,000,000 VND.
+  - [x] **Concurrency Race Condition Test:** 10 parallel `POST /api/v1/orders` calls for 1 remaining bike → exactly 1 `201`, 9 `409 INSUFFICIENT_STOCK`, zero negative inventory.
+  - [x] **Lazy Expiration Test:** An expired reservation (`expiresAt < NOW()`) is reclaimed inline by a new checkout without running cron.
+  - [x] Idempotency Replay & Payload Mismatch (`422`) tests pass 100%.
+  - [x] `MockPaymentAdapter` + `simulate-webhook`, signature forgery (`401`), and `providerTxId` replay tests pass 100%.
+  - [x] COD is strictly rejected when cart includes `BIKE` or accessory total exceeds 20,000,000 VND.
 
 ---
 

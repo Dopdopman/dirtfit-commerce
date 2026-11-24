@@ -1,0 +1,66 @@
+import { AppError, ERROR_CODES, ORDER_STATUSES } from '@dirtfit/shared';
+
+export const ALLOWED_ORDER_TRANSITIONS = Object.freeze({
+  [ORDER_STATUSES.PENDING_PAYMENT]: [
+    ORDER_STATUSES.DEPOSIT_PAID,
+    ORDER_STATUSES.PAID,
+    ORDER_STATUSES.CONFIRMED,
+    ORDER_STATUSES.CANCELLED,
+    ORDER_STATUSES.EXPIRED,
+  ],
+  [ORDER_STATUSES.DEPOSIT_PAID]: [
+    ORDER_STATUSES.PREPARING,
+    ORDER_STATUSES.READY_FOR_HANDOVER,
+    ORDER_STATUSES.PAID,
+    ORDER_STATUSES.CANCELLED,
+    ORDER_STATUSES.REFUNDED,
+  ],
+  [ORDER_STATUSES.PAID]: [
+    ORDER_STATUSES.CONFIRMED,
+    ORDER_STATUSES.PREPARING,
+    ORDER_STATUSES.READY_FOR_HANDOVER,
+    ORDER_STATUSES.SHIPPING,
+    ORDER_STATUSES.COMPLETED,
+    ORDER_STATUSES.REFUNDED,
+  ],
+  [ORDER_STATUSES.CONFIRMED]: [
+    ORDER_STATUSES.PREPARING,
+    ORDER_STATUSES.READY_FOR_HANDOVER,
+    ORDER_STATUSES.SHIPPING,
+    ORDER_STATUSES.COMPLETED,
+    ORDER_STATUSES.CANCELLED,
+  ],
+  [ORDER_STATUSES.PREPARING]: [
+    ORDER_STATUSES.READY_FOR_HANDOVER,
+    ORDER_STATUSES.SHIPPING,
+    ORDER_STATUSES.COMPLETED,
+    ORDER_STATUSES.CANCELLED,
+  ],
+  [ORDER_STATUSES.READY_FOR_HANDOVER]: [
+    ORDER_STATUSES.SHIPPING,
+    ORDER_STATUSES.COMPLETED,
+    ORDER_STATUSES.CANCELLED,
+  ],
+  [ORDER_STATUSES.SHIPPING]: [ORDER_STATUSES.COMPLETED, ORDER_STATUSES.REFUNDED],
+  [ORDER_STATUSES.COMPLETED]: [],
+  [ORDER_STATUSES.CANCELLED]: [],
+  [ORDER_STATUSES.EXPIRED]: [],
+  [ORDER_STATUSES.REFUNDED]: [],
+});
+
+/**
+ * Validate whether an Order status transition is permitted by the state machine.
+ * @param {string} currentStatus
+ * @param {string} nextStatus
+ */
+export function assertValidOrderTransition(currentStatus, nextStatus) {
+  const allowed = ALLOWED_ORDER_TRANSITIONS[currentStatus] ?? [];
+  if (!allowed.includes(nextStatus)) {
+    throw new AppError({
+      code: ERROR_CODES.INVALID_ORDER_TRANSITION,
+      status: 422,
+      title: 'Invalid order state transition',
+      detail: `Cannot transition order from ${currentStatus} to ${nextStatus}.`,
+    });
+  }
+}

@@ -5,9 +5,14 @@ import { loadEnv } from './config/env.js';
 import accessoriesRoutes from './modules/accessories/accessories.routes.js';
 import auditRoutes from './modules/audit/audit.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import cartRoutes from './modules/cart/cart.routes.js';
 import catalogRoutes from './modules/catalog/catalog.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
+import ordersRoutes from './modules/orders/orders.routes.js';
+import paymentsRoutes from './modules/payments/payments.routes.js';
 import simulatorRoutes from './modules/simulator/simulator.routes.js';
+import sweeperRoutes from './modules/sweeper/sweeper.routes.js';
+import testRidesRoutes from './modules/test-rides/test-rides.routes.js';
 import uploadsRoutes from './modules/uploads/uploads.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import authPlugin from './plugins/auth.plugin.js';
@@ -97,6 +102,11 @@ export async function buildApp(options = {}) {
       await api.register(catalogRoutes);
       await api.register(accessoriesRoutes);
       await api.register(simulatorRoutes);
+      await api.register(cartRoutes);
+      await api.register(ordersRoutes);
+      await api.register(paymentsRoutes);
+      await api.register(testRidesRoutes);
+      await api.register(sweeperRoutes);
       await api.register(uploadsRoutes);
       await api.register(auditRoutes);
     },
