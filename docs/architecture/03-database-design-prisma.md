@@ -183,6 +183,12 @@ enum ReservationStatus {
   EXPIRED
 }
 
+enum ShowroomCode {
+  HN_LONG_BIEN
+  DN_SON_TRA
+  HCM_THU_DUC
+}
+
 enum TestRideStatus {
   PENDING
   CONFIRMED
@@ -384,10 +390,12 @@ model BikeMedia {
   calibrationData Json?     @map("calibration_data")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
 
   bike            Bike      @relation(fields: [bikeId], references: [id], onDelete: Cascade)
 
   @@index([bikeId, mediaType, sortOrder])
+  @@index([deletedAt])
   @@map("bike_media")
 }
 
@@ -611,7 +619,7 @@ model TestRideBooking {
   userId               String         @map("user_id") @db.Uuid
   bikeId               String         @map("bike_id") @db.Uuid
   assignedStaffId      String?        @map("assigned_staff_id") @db.Uuid
-  showroomCode         String         @map("showroom_code") @db.VarChar(32) // 3 canonical showrooms: HN_LONG_BIEN (Hanoi), DN_SON_TRA (Da Nang), HCM_THU_DUC (HCMC)
+  showroomCode         ShowroomCode   @map("showroom_code") // 3 canonical showrooms: HN_LONG_BIEN (Hanoi), DN_SON_TRA (Da Nang), HCM_THU_DUC (HCMC)
   scheduledDate        DateTime       @map("scheduled_date") @db.Date
   timeSlot             String         @map("time_slot") @db.VarChar(16) // e.g., '09:00-10:30'
   licenseClass         String         @map("license_class") @db.VarChar(16) // A1 / A2
@@ -684,10 +692,10 @@ ALTER TABLE order_items
   ADD CONSTRAINT chk_order_item_qty_positive CHECK (quantity > 0),
   ADD CONSTRAINT chk_order_item_money_non_negative CHECK (unit_price_vnd >= 0 AND line_total_vnd >= 0);
 
--- 3. At most 1 primary SIDE_PROFILE_BLUEPRINT per bike
+-- 3. At most 1 active primary SIDE_PROFILE_BLUEPRINT per bike (excluding soft-deleted rows)
 CREATE UNIQUE INDEX uq_bike_single_primary_blueprint
   ON bike_media (bike_id)
-  WHERE media_type = 'SIDE_PROFILE_BLUEPRINT' AND is_primary = true;
+  WHERE media_type = 'SIDE_PROFILE_BLUEPRINT' AND is_primary = true AND deleted_at IS NULL;
 
 -- 4. Prevent double-booking the same bike, showroom, date, and slot while PENDING/CONFIRMED
 CREATE UNIQUE INDEX uq_test_ride_slot_active

@@ -3,12 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
-    "verify:compat": "node scripts/verify-stack-compat.mjs"
+    "verify:compat": "node scripts/verify-stack-compat.mjs",
+    "db:validate": "prisma validate",
+    "db:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:reset": "prisma migrate reset --force",
+    "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@dirtfit/ergonomics-engine": "workspace:*",

@@ -1,0 +1,606 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // PgBouncer pooled URL (Neon)
+  directUrl = env("DIRECT_URL")   // Direct non-pooled URL for prisma migrate deploy
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  CUSTOMER
+  SALES_STAFF
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  UNSPECIFIED
+}
+
+enum BodyProportion {
+  SHORT_LEGS
+  AVERAGE
+  LONG_LEGS
+}
+
+enum FootwearType {
+  SNEAKERS
+  ADV_BOOTS
+  MX_BOOTS
+}
+
+enum RidingExperience {
+  BEGINNER
+  INTERMEDIATE
+  EXPERT
+}
+
+enum BikeCategory {
+  MOTOCROSS
+  ENDURO
+  DUAL_SPORT
+  ADVENTURE
+  SUPERMOTO
+}
+
+enum RidingFocus {
+  OFF_ROAD
+  ON_OFF_MIXED
+  ON_ROAD_ADV
+}
+
+enum SeatFoamFirmness {
+  FIRM
+  MEDIUM
+  PLUSH
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum MediaType {
+  HERO
+  GALLERY
+  SIDE_PROFILE_BLUEPRINT
+  SPEC_SHEET
+}
+
+enum AccessoryCategory {
+  LOWERING_LINK
+  LOW_SEAT
+  BAR_RISER
+  FOOTPEG_LOWER
+  SHOCK_SPRING
+  PROTECTION
+  APPAREL
+  EXHAUST
+  OTHER
+}
+
+enum ItemType {
+  BIKE
+  ACCESSORY
+}
+
+enum OrderType {
+  BIKE_DEPOSIT
+  FULL_PURCHASE
+  ACCESSORY_ONLY
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  DEPOSIT_PAID
+  PAID
+  CONFIRMED
+  PREPARING
+  READY_FOR_HANDOVER
+  SHIPPING
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PAYOS
+  MOCK // Local/Test/CI only (MockPaymentAdapter); strictly blocked in production
+  VNPAY
+  STRIPE
+  COD
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum ReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+enum ShowroomCode {
+  HN_LONG_BIEN
+  DN_SON_TRA
+  HCM_THU_DUC
+}
+
+enum TestRideStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// ============================================================================
+// 1. AUTHENTICATION, USERS & BODY PROFILES
+// ============================================================================
+
+model User {
+  id                String            @id @default(uuid()) @db.Uuid
+  email             String            @unique @db.VarChar(255)
+  phone             String?           @db.VarChar(20)
+  fullName          String            @map("full_name") @db.VarChar(120)
+  passwordHash      String            @map("password_hash") @db.VarChar(255)
+  role              UserRole          @default(CUSTOMER)
+  isEmailVerified   Boolean           @default(false) @map("is_email_verified")
+  isActive          Boolean           @default(true) @map("is_active")
+  lastLoginAt       DateTime?         @map("last_login_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  deletedAt         DateTime?         @map("deleted_at")
+
+  refreshTokens     RefreshToken[]
+  bodyProfiles      UserBodyProfile[]
+  cart              Cart?
+  orders            Order[]
+  testRideBookings  TestRideBooking[] @relation("CustomerTestRides")
+  assignedTestRides TestRideBooking[] @relation("StaffTestRides")
+  auditLogs         AuditLog[]
+
+  @@index([role, isActive])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  familyId          String    @map("family_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash") @db.VarChar(64)
+  replacedByTokenId String?   @map("replaced_by_token_id") @db.Uuid
+  revokedAt         DateTime? @map("revoked_at")
+  expiresAt         DateTime  @map("expires_at")
+  ipAddress         String?   @map("ip_address") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.VarChar(512)
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model UserBodyProfile {
+  id               String           @id @default(uuid()) @db.Uuid
+  userId           String           @map("user_id") @db.Uuid
+  label            String           @default("Default Profile") @db.VarChar(80)
+  heightCm         Float            @map("height_cm")
+  weightKg         Float            @map("weight_kg")
+  inseamCm         Float?           @map("inseam_cm")
+  gender           Gender           @default(UNSPECIFIED)
+  bodyProportion   BodyProportion   @default(AVERAGE) @map("body_proportion")
+  footwear         FootwearType     @default(ADV_BOOTS)
+  gearWeightKg     Float            @default(7) @map("gear_weight_kg")
+  ridingExperience RidingExperience @default(INTERMEDIATE) @map("riding_experience")
+  isDefault        Boolean          @default(false) @map("is_default")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isDefault])
+  @@map("user_body_profiles")
+}
+
+// ============================================================================
+// 2. CATALOG: BRANDS, BIKES, GEOMETRY & MEDIA CALIBRATION
+// ============================================================================
+
+model Brand {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(80)
+  slug      String   @unique @db.VarChar(100)
+  country   String?  @db.VarChar(60)
+  logoUrl   String?  @map("logo_url") @db.VarChar(512)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bikes     Bike[]
+
+  @@map("brands")
+}
+
+model Bike {
+  id               String        @id @default(uuid()) @db.Uuid
+  brandId          String        @map("brand_id") @db.Uuid
+  sku              String        @unique @db.VarChar(64)
+  name             String        @db.VarChar(160)
+  slug             String        @unique @db.VarChar(180)
+  modelYear        Int           @map("model_year")
+  category         BikeCategory
+  ridingFocus      RidingFocus   @map("riding_focus")
+  engineCc         Int           @map("engine_cc")
+  streetLegal      Boolean       @default(true) @map("street_legal")
+  priceVnd         BigInt        @map("price_vnd")
+  depositAmountVnd BigInt        @map("deposit_amount_vnd")
+  stockQty         Int           @default(0) @map("stock_qty")
+  reservedQty      Int           @default(0) @map("reserved_qty")
+  version          Int           @default(1)
+  status           ProductStatus @default(DRAFT)
+  shortSummary     String?       @map("short_summary") @db.VarChar(500)
+  descriptionMd    String?       @map("description_md") @db.Text
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  deletedAt        DateTime?     @map("deleted_at")
+
+  brand            Brand         @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  geometrySpec     BikeGeometrySpec?
+  media            BikeMedia[]
+  compatibilities  BikeAccessoryCompatibility[]
+  cartItems        CartItem[]
+  orderItems       OrderItem[]
+  reservations     InventoryReservation[]
+  testRideBookings TestRideBooking[]
+
+  @@index([status, deletedAt])
+  @@index([category, ridingFocus, status])
+  @@index([brandId, status])
+  @@index([priceVnd])
+  @@map("bikes")
+}
+
+model BikeGeometrySpec {
+  id                      String           @id @default(uuid()) @db.Uuid
+  bikeId                  String           @unique @map("bike_id") @db.Uuid
+
+  unladenSeatHeightMm     Int              @map("unladen_seat_height_mm")
+  seatWidthMm             Int              @map("seat_width_mm")
+  wheelbaseMm             Int              @map("wheelbase_mm")
+  groundClearanceMm       Int              @map("ground_clearance_mm")
+  frontWheelDiameterIn    Float            @map("front_wheel_diameter_in")
+  rearWheelDiameterIn     Float            @map("rear_wheel_diameter_in")
+  frontTireOuterRadiusMm  Int              @map("front_tire_outer_radius_mm")
+  rearTireOuterRadiusMm   Int              @map("rear_tire_outer_radius_mm")
+
+  frontTravelMm           Int              @map("front_travel_mm")
+  rearTravelMm            Int              @map("rear_travel_mm")
+  staticSagRearMm         Int              @map("static_sag_rear_mm")
+  staticSagFrontMm        Int              @map("static_sag_front_mm")
+  targetRiderSagRatio     Float            @default(0.33) @map("target_rider_sag_ratio")
+  referenceRiderWeightKg  Float            @default(83) @map("reference_rider_weight_kg")
+  linkageProgressionAlpha Float            @default(0.85) @map("linkage_progression_alpha")
+  seatFoamFirmness        SeatFoamFirmness @default(MEDIUM) @map("seat_foam_firmness")
+
+  seatPocketXMm           Int              @map("seat_pocket_x_mm")
+  seatPocketYMm           Int              @map("seat_pocket_y_mm")
+  footpegXMm              Int              @map("footpeg_x_mm")
+  footpegYMm              Int              @map("footpeg_y_mm")
+  handlebarGripXMm        Int              @map("handlebar_grip_x_mm")
+  handlebarGripYMm        Int              @map("handlebar_grip_y_mm")
+
+  rakeDeg                 Float?           @map("rake_deg")
+  trailMm                 Float?           @map("trail_mm")
+  wetWeightKg             Float            @map("wet_weight_kg")
+  fuelCapacityL           Float?           @map("fuel_capacity_l")
+  technicalSpecsJson      Json?            @map("technical_specs_json")
+
+  updatedAt               DateTime         @updatedAt @map("updated_at")
+
+  bike                    Bike             @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+
+  @@index([unladenSeatHeightMm, wetWeightKg])
+  @@map("bike_geometry_specs")
+}
+
+model BikeMedia {
+  id              String    @id @default(uuid()) @db.Uuid
+  bikeId          String    @map("bike_id") @db.Uuid
+  url             String    @db.VarChar(512)
+  storageKey      String    @map("storage_key") @db.VarChar(255)
+  mediaType       MediaType @default(GALLERY) @map("media_type")
+  altText         String?   @map("alt_text") @db.VarChar(200)
+  widthPx         Int?      @map("width_px")
+  heightPx        Int?      @map("height_px")
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  sortOrder       Int       @default(0) @map("sort_order")
+  calibrationData Json?     @map("calibration_data")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  bike            Bike      @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+
+  @@index([bikeId, mediaType, sortOrder])
+  @@index([deletedAt])
+  @@map("bike_media")
+}
+
+// ============================================================================
+// 3. ACCESSORIES & COMPATIBILITY MATRIX
+// ============================================================================
+
+model Accessory {
+  id              String            @id @default(uuid()) @db.Uuid
+  sku             String            @unique @db.VarChar(64)
+  name            String            @db.VarChar(160)
+  slug            String            @unique @db.VarChar(180)
+  category        AccessoryCategory
+  brandName       String?           @map("brand_name") @db.VarChar(80)
+  priceVnd        BigInt            @map("price_vnd")
+  stockQty        Int               @default(0) @map("stock_qty")
+  reservedQty     Int               @default(0) @map("reserved_qty")
+  version         Int               @default(1)
+  status          ProductStatus     @default(ACTIVE)
+  imageUrl        String?           @map("image_url") @db.VarChar(512)
+  descriptionMd   String?           @map("description_md") @db.Text
+  ergoImpactJson  Json?             @map("ergo_impact_json")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+
+  compatibilities BikeAccessoryCompatibility[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  reservations    InventoryReservation[]
+
+  @@index([category, status, deletedAt])
+  @@map("accessories")
+}
+
+model BikeAccessoryCompatibility {
+  id                      String    @id @default(uuid()) @db.Uuid
+  bikeId                  String    @map("bike_id") @db.Uuid
+  accessoryId             String    @map("accessory_id") @db.Uuid
+  exactSeatDropMm         Int?      @map("exact_seat_drop_mm")
+  exactForkDropMm         Int?      @map("exact_fork_drop_mm")
+  requiresWorkshopInstall Boolean   @default(false) @map("requires_workshop_install")
+  installLaborVnd         BigInt    @default(0) @map("install_labor_vnd")
+  fitmentNotes            String?   @map("fitment_notes") @db.VarChar(300)
+  createdAt               DateTime  @default(now()) @map("created_at")
+
+  bike                    Bike      @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+  accessory               Accessory @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+
+  @@unique([bikeId, accessoryId])
+  @@index([accessoryId])
+  @@map("bike_accessory_compatibilities")
+}
+
+// ============================================================================
+// 4. CART, ORDERS, INVENTORY RESERVATION & PAYMENTS
+// ============================================================================
+
+model Cart {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String?    @unique @map("user_id") @db.Uuid
+  guestToken String?    @unique @map("guest_token") @db.VarChar(64)
+  expiresAt  DateTime?  @map("expires_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      CartItem[]
+
+  @@index([expiresAt])
+  @@map("carts")
+}
+
+model CartItem {
+  id            String     @id @default(uuid()) @db.Uuid
+  cartId        String     @map("cart_id") @db.Uuid
+  itemType      ItemType   @map("item_type")
+  bikeId        String?    @map("bike_id") @db.Uuid
+  accessoryId   String?    @map("accessory_id") @db.Uuid
+  bundleGroupId String?    @map("bundle_group_id") @db.Uuid
+  quantity      Int        @default(1)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  cart          Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  bike          Bike?      @relation(fields: [bikeId], references: [id], onDelete: Cascade)
+  accessory     Accessory? @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  orderNumber          String                 @unique @map("order_number") @db.VarChar(32)
+  userId               String                 @map("user_id") @db.Uuid
+  orderType            OrderType              @map("order_type")
+  status               OrderStatus            @default(PENDING_PAYMENT)
+  paymentMethod        PaymentMethod          @map("payment_method")
+
+  subtotalVnd          BigInt                 @map("subtotal_vnd")
+  installLaborTotalVnd BigInt                 @default(0) @map("install_labor_total_vnd")
+  shippingFeeVnd       BigInt                 @default(0) @map("shipping_fee_vnd")
+  discountVnd          BigInt                 @default(0) @map("discount_vnd")
+  totalVnd             BigInt                 @map("total_vnd")
+  payableNowVnd        BigInt                 @map("payable_now_vnd")
+  paidAmountVnd        BigInt                 @default(0) @map("paid_amount_vnd")
+  remainingBalanceVnd  BigInt                 @map("remaining_balance_vnd")
+
+  reservationExpiresAt DateTime?              @map("reservation_expires_at")
+  shippingAddressJson  Json                   @map("shipping_address_json")
+  riderFitSnapshotJson Json?                  @map("rider_fit_snapshot_json")
+  customerNote         String?                @map("customer_note") @db.VarChar(500)
+  internalNote         String?                @map("internal_note") @db.Text
+
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  deletedAt            DateTime?              @map("deleted_at")
+
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items                OrderItem[]
+  reservations         InventoryReservation[]
+  transactions         PaymentTransaction[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, reservationExpiresAt])
+  @@index([deletedAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                  String     @id @default(uuid()) @db.Uuid
+  orderId             String     @map("order_id") @db.Uuid
+  itemType            ItemType   @map("item_type")
+  bikeId              String?    @map("bike_id") @db.Uuid
+  accessoryId         String?    @map("accessory_id") @db.Uuid
+  productNameSnapshot String     @map("product_name_snapshot") @db.VarChar(180)
+  skuSnapshot         String     @map("sku_snapshot") @db.VarChar(64)
+  unitPriceVnd        BigInt     @map("unit_price_vnd")
+  installLaborVnd     BigInt     @default(0) @map("install_labor_vnd")
+  quantity            Int
+  lineTotalVnd        BigInt     @map("line_total_vnd")
+  metadataJson        Json?      @map("metadata_json")
+
+  order               Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bike                Bike?      @relation(fields: [bikeId], references: [id], onDelete: SetNull)
+  accessory           Accessory? @relation(fields: [accessoryId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model InventoryReservation {
+  id          String            @id @default(uuid()) @db.Uuid
+  orderId     String            @map("order_id") @db.Uuid
+  itemType    ItemType          @map("item_type")
+  bikeId      String?           @map("bike_id") @db.Uuid
+  accessoryId String?           @map("accessory_id") @db.Uuid
+  quantity    Int
+  status      ReservationStatus @default(ACTIVE)
+  expiresAt   DateTime          @map("expires_at")
+  resolvedAt  DateTime?         @map("resolved_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  order       Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bike        Bike?             @relation(fields: [bikeId], references: [id], onDelete: Restrict)
+  accessory   Accessory?        @relation(fields: [accessoryId], references: [id], onDelete: Restrict)
+
+  @@index([status, expiresAt])
+  @@index([orderId])
+  @@map("inventory_reservations")
+}
+
+model PaymentTransaction {
+  id                String        @id @default(uuid()) @db.Uuid
+  orderId           String        @map("order_id") @db.Uuid
+  provider          PaymentMethod
+  providerTxId      String?       @unique @map("provider_tx_id") @db.VarChar(128)
+  checkoutUrl       String?       @map("checkout_url") @db.VarChar(1024)
+  amountVnd         BigInt        @map("amount_vnd")
+  currency          String        @default("VND") @db.VarChar(8)
+  status            PaymentStatus @default(INITIATED)
+  failureReason     String?       @map("failure_reason") @db.VarChar(300)
+  rawWebhookPayload Json?         @map("raw_webhook_payload")
+  verifiedAt        DateTime?     @map("verified_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, status])
+  @@map("payment_transactions")
+}
+
+model IdempotencyKey {
+  id             String   @id @default(uuid()) @db.Uuid
+  scope          String   @db.VarChar(64)
+  key            String   @db.VarChar(128)
+  userId         String   @map("user_id") @db.Uuid
+  requestHash    String   @map("request_hash") @db.VarChar(64)
+  responseStatus Int?     @map("response_status")
+  responseBody   Json?    @map("response_body")
+  isProcessing   Boolean  @default(true) @map("is_processing")
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([scope, key, userId])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+// ============================================================================
+// 5. TEST RIDE BOOKINGS & IMMUTABLE AUDIT LOG
+// ============================================================================
+
+model TestRideBooking {
+  id                   String         @id @default(uuid()) @db.Uuid
+  bookingCode          String         @unique @map("booking_code") @db.VarChar(24)
+  userId               String         @map("user_id") @db.Uuid
+  bikeId               String         @map("bike_id") @db.Uuid
+  assignedStaffId      String?        @map("assigned_staff_id") @db.Uuid
+  showroomCode         ShowroomCode   @map("showroom_code")
+  scheduledDate        DateTime       @map("scheduled_date") @db.Date
+  timeSlot             String         @map("time_slot") @db.VarChar(16)
+  licenseClass         String         @map("license_class") @db.VarChar(16)
+  riderProfileSnapshot Json?          @map("rider_profile_snapshot")
+  requestedModsJson    Json?          @map("requested_mods_json")
+  status               TestRideStatus @default(PENDING)
+  notes                String?        @db.VarChar(500)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  user                 User           @relation("CustomerTestRides", fields: [userId], references: [id], onDelete: Restrict)
+  bike                 Bike           @relation(fields: [bikeId], references: [id], onDelete: Restrict)
+  assignedStaff        User?          @relation("StaffTestRides", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+
+  @@index([bikeId, scheduledDate, timeSlot, status])
+  @@index([userId, scheduledDate(sort: Desc)])
+  @@map("test_ride_bookings")
+}
+
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  actorId     String?   @map("actor_id") @db.Uuid
+  actorRole   UserRole? @map("actor_role")
+  action      String    @db.VarChar(80)
+  entityType  String    @map("entity_type") @db.VarChar(48)
+  entityId    String    @map("entity_id") @db.VarChar(64)
+  beforeState Json?     @map("before_state")
+  afterState  Json?     @map("after_state")
+  ipAddress   String?   @map("ip_address") @db.VarChar(45)
+  userAgent   String?   @map("user_agent") @db.VarChar(512)
+  requestId   String?   @map("request_id") @db.VarChar(64)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}

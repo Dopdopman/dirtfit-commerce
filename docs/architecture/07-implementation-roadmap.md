@@ -69,9 +69,9 @@ flowchart TD
   - Initial SQL migration appending all `CHECK` constraints (`stock_qty >= 0`, `reserved_qty <= stock_qty`, polymorphic `cart_items`) and Partial Unique Indexes (`uq_bike_single_primary_blueprint`, `uq_test_ride_slot_active`, `uq_user_single_default_body_profile`).
   - `apps/api/prisma/seed.js`: Seeds Admin, Sales Staff, Customer, **3 canonical showrooms (`HN_LONG_BIEN`, `DN_SON_TRA`, `HCM_THU_DUC`)**, at least **8 real-world motorcycles** (`Honda CRF150L`, `Honda CRF300L`, `Yamaha WR155R`, `Kawasaki KLX230`, `KTM 350 EXC-F`, `Husqvarna FE 350`, `Yamaha Ténéré 700`, `Honda CRF250R`) with realistic `BikeGeometrySpec`, plus compatible accessories (lowering links, low seats, bar risers, MX boots).
 - **Definition of Done (DoD):**
-  - [ ] `prisma validate` and `prisma migrate dev` pass cleanly.
-  - [ ] `prisma db seed` is idempotent (re-running succeeds without duplicates).
-  - [ ] Direct SQL verification confirms PostgreSQL rejects `UPDATE bikes SET reserved_qty = stock_qty + 1`.
+  - [x] `prisma validate` and `prisma migrate dev` pass cleanly.
+  - [x] `prisma db seed` is idempotent (re-running succeeds without duplicates).
+  - [x] Direct SQL verification confirms PostgreSQL rejects `UPDATE bikes SET reserved_qty = stock_qty + 1`.
 
 ---
 
