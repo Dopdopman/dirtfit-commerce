@@ -129,10 +129,10 @@ flowchart TD
   - Storefront pages: `/` (Editorial Hero + Quick Fit Bar), `/bikes` (Dual Terrain + Rider Fit Filter), `/bikes/[slug]` (3-tier Progressive Disclosure + Spec Drawer), `/accessories`.
   - `RiderFitSimulator` (5-layer SVG Blueprint + Parametric Wireframe Fallback + 1-click Mod Switcher + Smart Upsell Card) & `/compare` (**Ghost Overlay**).
 - **Definition of Done (DoD):**
-  - [ ] Zero purple-blue gradients, zero glassmorphism, zero cluttered spec dumps; Lighthouse Accessibility >= 90.
-  - [ ] Slider interactions run at 60fps with zero horizontal number jitter (`tabular-nums`).
-  - [ ] Ghost Overlay scales both motorcycles accurately by real `wheelbaseMm`.
-  - [ ] Clean responsive layouts on Desktop (1440px) and Mobile (390px).
+  - [x] Zero purple-blue gradients, zero glassmorphism, zero cluttered spec dumps; Lighthouse Accessibility >= 90.
+  - [x] Slider interactions run at 60fps with zero horizontal number jitter (`tabular-nums`).
+  - [x] Ghost Overlay scales both motorcycles accurately by real `wheelbaseMm`.
+  - [x] Clean responsive layouts on Desktop (1440px) and Mobile (390px).
 
 ---
 

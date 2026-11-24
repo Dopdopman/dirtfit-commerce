@@ -1,20 +1,57 @@
+import { Be_Vietnam_Pro, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
+import ColdStartNotice from '@/components/layout/ColdStartNotice';
+import SiteFooter from '@/components/layout/SiteFooter';
+import SiteHeader from '@/components/layout/SiteHeader';
+import AppProviders from '@/providers/AppProviders';
 import './globals.css';
 
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['600', '700', '800'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['500', '600', '700'],
+  variable: '--font-mono',
+  display: 'swap',
+});
+
 export const metadata = {
-  title: 'DirtFit Commerce — Xe Máy Địa Hình & Rider Fit Simulator',
-  description: 'Nền tảng thương mại điện tử chuyên xe máy địa hình và mô phỏng vóc dáng người lái.',
+  title: 'DirtFit Commerce — Xe Máy Địa Hình & Mô Phỏng Vóc Dáng 2D',
+  description:
+    'Nền tảng thương mại điện tử chuyên xe máy địa hình Enduro, Dual-Sport, Motocross, Adventure kèm 2D Parametric Rider Fit Simulator.',
 };
 
 /**
- * Root layout for DirtFit storefront.
+ * Root App Router layout loading 3 Vietnamese-ready fonts and Storefront providers.
  * @param {object} props
  * @param {import('react').ReactNode} props.children
  * @returns {import('react').JSX.Element}
  */
 export default function RootLayout({ children }) {
   return (
-    <html lang="vi">
-      <body>{children}</body>
+    <html
+      lang="vi"
+      className={`${plusJakartaSans.variable} ${beVietnamPro.variable} ${jetBrainsMono.variable}`}
+    >
+      <body className="flex min-h-screen flex-col bg-canvas text-ink">
+        <AppProviders>
+          <ColdStartNotice />
+          <SiteHeader />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+        </AppProviders>
+      </body>
     </html>
   );
 }

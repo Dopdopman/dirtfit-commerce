@@ -13,6 +13,10 @@
   "dependencies": {
     "@dirtfit/ergonomics-engine": "workspace:*",
     "@dirtfit/shared": "workspace:*",
+    "@radix-ui/react-dialog": "1.3.1",
+    "@radix-ui/react-slider": "1.6.1",
+    "@radix-ui/react-tabs": "1.2.1",
+    "lucide-react": "1.79.0",
     "next": "15.5.29",
     "react": "19.2.9",
     "react-dom": "19.2.9"
