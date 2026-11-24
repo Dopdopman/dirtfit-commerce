@@ -1,0 +1,182 @@
+export const SHARED_VERSION = '1.0.0';
+
+export const USER_ROLES = Object.freeze({
+  CUSTOMER: 'CUSTOMER',
+  SALES_STAFF: 'SALES_STAFF',
+  ADMIN: 'ADMIN',
+});
+
+export const GENDERS = Object.freeze({
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  UNSPECIFIED: 'UNSPECIFIED',
+});
+
+export const BODY_PROPORTIONS = Object.freeze({
+  SHORT_LEGS: 'SHORT_LEGS',
+  AVERAGE: 'AVERAGE',
+  LONG_LEGS: 'LONG_LEGS',
+});
+
+export const FOOTWEAR_TYPES = Object.freeze({
+  SNEAKERS: 'SNEAKERS',
+  ADV_BOOTS: 'ADV_BOOTS',
+  MX_BOOTS: 'MX_BOOTS',
+});
+
+export const RIDING_EXPERIENCES = Object.freeze({
+  BEGINNER: 'BEGINNER',
+  INTERMEDIATE: 'INTERMEDIATE',
+  EXPERT: 'EXPERT',
+});
+
+export const TARGET_TERRAINS = Object.freeze({
+  ON_ROAD: 'ON_ROAD',
+  DUAL_SPORT: 'DUAL_SPORT',
+  OFF_ROAD: 'OFF_ROAD',
+});
+
+export const STANCE_MODES = Object.freeze({
+  SEATED_BOTH_FEET: 'SEATED_BOTH_FEET',
+  SEATED_ONE_FOOT: 'SEATED_ONE_FOOT',
+  SEATED_RIDING: 'SEATED_RIDING',
+  STANDING_ATTACK: 'STANDING_ATTACK',
+});
+
+export const BIKE_CATEGORIES = Object.freeze({
+  MOTOCROSS: 'MOTOCROSS',
+  ENDURO: 'ENDURO',
+  DUAL_SPORT: 'DUAL_SPORT',
+  ADVENTURE: 'ADVENTURE',
+  SUPERMOTO: 'SUPERMOTO',
+});
+
+export const RIDING_FOCUSES = Object.freeze({
+  OFF_ROAD: 'OFF_ROAD',
+  ON_OFF_MIXED: 'ON_OFF_MIXED',
+  ON_ROAD_ADV: 'ON_ROAD_ADV',
+});
+
+export const SEAT_FOAM_FIRMNESS = Object.freeze({
+  FIRM: 'FIRM',
+  MEDIUM: 'MEDIUM',
+  PLUSH: 'PLUSH',
+});
+
+export const PRODUCT_STATUSES = Object.freeze({
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  OUT_OF_STOCK: 'OUT_OF_STOCK',
+  DISCONTINUED: 'DISCONTINUED',
+});
+
+export const MEDIA_TYPES = Object.freeze({
+  HERO: 'HERO',
+  GALLERY: 'GALLERY',
+  SIDE_PROFILE_BLUEPRINT: 'SIDE_PROFILE_BLUEPRINT',
+  SPEC_SHEET: 'SPEC_SHEET',
+});
+
+export const ACCESSORY_CATEGORIES = Object.freeze({
+  LOWERING_LINK: 'LOWERING_LINK',
+  LOW_SEAT: 'LOW_SEAT',
+  BAR_RISER: 'BAR_RISER',
+  FOOTPEG_LOWER: 'FOOTPEG_LOWER',
+  SHOCK_SPRING: 'SHOCK_SPRING',
+  PROTECTION: 'PROTECTION',
+  APPAREL: 'APPAREL',
+  EXHAUST: 'EXHAUST',
+  OTHER: 'OTHER',
+});
+
+export const ITEM_TYPES = Object.freeze({
+  BIKE: 'BIKE',
+  ACCESSORY: 'ACCESSORY',
+});
+
+export const ORDER_TYPES = Object.freeze({
+  BIKE_DEPOSIT: 'BIKE_DEPOSIT',
+  FULL_PURCHASE: 'FULL_PURCHASE',
+  ACCESSORY_ONLY: 'ACCESSORY_ONLY',
+});
+
+export const ORDER_STATUSES = Object.freeze({
+  PENDING_PAYMENT: 'PENDING_PAYMENT',
+  DEPOSIT_PAID: 'DEPOSIT_PAID',
+  PAID: 'PAID',
+  CONFIRMED: 'CONFIRMED',
+  PREPARING: 'PREPARING',
+  READY_FOR_HANDOVER: 'READY_FOR_HANDOVER',
+  SHIPPING: 'SHIPPING',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED',
+  REFUNDED: 'REFUNDED',
+});
+
+export const PAYMENT_METHODS = Object.freeze({
+  PAYOS: 'PAYOS',
+  MOCK: 'MOCK',
+  VNPAY: 'VNPAY',
+  STRIPE: 'STRIPE',
+  COD: 'COD',
+});
+
+export const PAYMENT_STATUSES = Object.freeze({
+  INITIATED: 'INITIATED',
+  PENDING: 'PENDING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED',
+});
+
+export const RESERVATION_STATUSES = Object.freeze({
+  ACTIVE: 'ACTIVE',
+  COMMITTED: 'COMMITTED',
+  RELEASED: 'RELEASED',
+  EXPIRED: 'EXPIRED',
+});
+
+export const TEST_RIDE_STATUSES = Object.freeze({
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  NO_SHOW: 'NO_SHOW',
+});
+
+export const SHOWROOM_CODES = Object.freeze({
+  HN_LONG_BIEN: 'HN_LONG_BIEN',
+  DN_SON_TRA: 'DN_SON_TRA',
+  HCM_THU_DUC: 'HCM_THU_DUC',
+});
+
+export const SHOWROOMS = Object.freeze([
+  Object.freeze({
+    code: SHOWROOM_CODES.HN_LONG_BIEN,
+    name: 'DirtFit Hà Nội — Long Biên',
+    city: 'Hanoi',
+    address: '285 Nguyễn Văn Cừ, Long Biên, Hà Nội',
+  }),
+  Object.freeze({
+    code: SHOWROOM_CODES.DN_SON_TRA,
+    name: 'DirtFit Đà Nẵng — Sơn Trà',
+    city: 'Da Nang',
+    address: '112 Võ Nguyên Giáp, Sơn Trà, Đà Nẵng',
+  }),
+  Object.freeze({
+    code: SHOWROOM_CODES.HCM_THU_DUC,
+    name: 'DirtFit TP.HCM — Thủ Đức',
+    city: 'Ho Chi Minh City',
+    address: '468 Xa Lộ Hà Nội, Thủ Đức, TP.HCM',
+  }),
+]);
+
+export const TEST_RIDE_TIME_SLOTS = Object.freeze([
+  '09:00-10:30',
+  '10:30-12:00',
+  '14:00-15:30',
+  '15:30-17:00',
+]);
+
+export const COD_MAX_AMOUNT_VND = 20_000_000;

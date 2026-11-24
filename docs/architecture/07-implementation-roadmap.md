@@ -53,10 +53,10 @@ flowchart TD
   - `packages/shared/src/`: `enums.js`, `money.js` (`toSafeVndNumber()`, `toVndBigInt()`, `formatVnd()`), `errors.js` (RFC 7807 error registry), and all `.strict()` Zod schemas in `schemas/*.schema.js`.
   - Comprehensive Vitest suites including **Golden Benchmarks** (KTM 350 EXC-F, Honda CRF300L, Yamaha Ténéré 700) and all Edge Cases (40 kg, 140 kg, 145 cm, 205 cm, `NaN` guards).
 - **Definition of Done (DoD):**
-  - [ ] `pnpm --filter @dirtfit/ergonomics-engine test:coverage` achieves **>= 95% coverage** with 100% pass rate.
-  - [ ] Golden benchmark effective seat heights remain within `±8mm` of reference values.
-  - [ ] `pnpm --filter @dirtfit/shared test` confirms `.strict()` rejects unknown fields and `toSafeVndNumber()` safely converts `BigInt`.
-  - [ ] Zero external dependencies in `@dirtfit/ergonomics-engine`.
+  - [x] `pnpm --filter @dirtfit/ergonomics-engine test:coverage` achieves **>= 95% coverage** with 100% pass rate.
+  - [x] Golden benchmark effective seat heights remain within `±8mm` of reference values.
+  - [x] `pnpm --filter @dirtfit/shared test` confirms `.strict()` rejects unknown fields and `toSafeVndNumber()` safely converts `BigInt`.
+  - [x] Zero external dependencies in `@dirtfit/ergonomics-engine`.
 
 ---
 

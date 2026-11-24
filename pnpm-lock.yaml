@@ -129,6 +129,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@dirtfit/ergonomics-engine':
+        specifier: workspace:*
+        version: link:../ergonomics-engine
       zod:
         specifier: 3.25.76
         version: 3.25.76

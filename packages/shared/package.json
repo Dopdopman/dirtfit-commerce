@@ -4,13 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./enums": "./src/enums.js",
+    "./errors": "./src/errors.js",
+    "./money": "./src/money.js",
+    "./schemas": "./src/schemas/index.js"
   },
   "scripts": {
-    "test": "vitest run --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@dirtfit/ergonomics-engine": "workspace:*",
     "zod": "3.25.76"
   }
 }
