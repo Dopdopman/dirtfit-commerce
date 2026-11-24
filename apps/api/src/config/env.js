@@ -49,6 +49,13 @@ const EnvSchema = z
 
     PAYMENT_DEFAULT_PROVIDER: z.enum(['MOCK', 'PAYOS', 'VNPAY', 'STRIPE', 'COD']).default('MOCK'),
     ENABLE_MOCK_PAYMENT: BooleanStringSchema.default(true),
+
+    STORAGE_DRIVER: z.enum(['local', 'r2']).default('local'),
+    R2_ACCOUNT_ID: z.string().optional(),
+    R2_ACCESS_KEY_ID: z.string().optional(),
+    R2_SECRET_ACCESS_KEY: z.string().optional(),
+    R2_BUCKET_NAME: z.string().min(1).default('dirtfit-media'),
+    R2_PUBLIC_BASE_URL: z.string().url().default('https://cdn.dirtfit.vn'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ENABLE_MOCK_PAYMENT) {
@@ -57,6 +64,30 @@ const EnvSchema = z
         path: ['ENABLE_MOCK_PAYMENT'],
         message: 'ENABLE_MOCK_PAYMENT must be false in production',
       });
+    }
+    if (env.NODE_ENV === 'production' && env.STORAGE_DRIVER === 'local') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['STORAGE_DRIVER'],
+        message: 'STORAGE_DRIVER must be r2 in production',
+      });
+    }
+    if (env.STORAGE_DRIVER === 'r2') {
+      const requiredR2Fields = [
+        'R2_ACCOUNT_ID',
+        'R2_ACCESS_KEY_ID',
+        'R2_SECRET_ACCESS_KEY',
+        'R2_BUCKET_NAME',
+      ];
+      for (const field of requiredR2Fields) {
+        if (!env[field] || String(env[field]).trim().length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required when STORAGE_DRIVER is r2`,
+          });
+        }
+      }
     }
     if (env.COOKIE_SAME_SITE === 'none' && !env.COOKIE_SECURE) {
       ctx.addIssue({
@@ -109,6 +140,12 @@ export function loadEnv(overrides = {}) {
     RATE_LIMIT_AUTH_MAX: rawSource.RATE_LIMIT_AUTH_MAX,
     PAYMENT_DEFAULT_PROVIDER: rawSource.PAYMENT_DEFAULT_PROVIDER,
     ENABLE_MOCK_PAYMENT: rawSource.ENABLE_MOCK_PAYMENT,
+    STORAGE_DRIVER: rawSource.STORAGE_DRIVER,
+    R2_ACCOUNT_ID: rawSource.R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID: rawSource.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: rawSource.R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME: rawSource.R2_BUCKET_NAME,
+    R2_PUBLIC_BASE_URL: rawSource.R2_PUBLIC_BASE_URL,
   };
 
   const parsed = EnvSchema.safeParse(candidate);

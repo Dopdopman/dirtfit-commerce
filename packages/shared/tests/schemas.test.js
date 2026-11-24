@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   BikeCreateSchema,
+  BikeFilterQuerySchema,
   CalibrationDataSchema,
   CartAddItemSchema,
   CreateOrderSchema,
   CreateTestRideSchema,
+  MediaPresignSchema,
   MockWebhookSimulateSchema,
   RegisterSchema,
   RiderProfileInputSchema,
@@ -199,5 +201,76 @@ describe('@dirtfit/shared strict Zod schemas & RFC 7807 builders', () => {
     expect(problem.status).toBe(409);
     expect(problem.requestId).toBe('req_123');
     expect(problem.errors).toHaveLength(1);
+  });
+
+  it('rejects geometrically invalid UV calibration, unsafe upload MIME/size, and preserves boolean filter flags', () => {
+    expect(
+      CalibrationDataSchema.safeParse({
+        version: 1,
+        facing: 'RIGHT',
+        imageWidthPx: 1600,
+        imageHeightPx: 1000,
+        anchorsUv: {
+          rearAxle: { u: 0.78, v: 0.7 },
+          frontAxle: { u: 0.2, v: 0.7 },
+          groundLineV: 0.91,
+          seatPocket: { u: 0.43, v: 0.38 },
+          footpeg: { u: 0.45, v: 0.7 },
+          handlebarGrip: { u: 0.64, v: 0.26 },
+        },
+      }).success
+    ).toBe(false);
+
+    expect(
+      CalibrationDataSchema.safeParse({
+        version: 1,
+        facing: 'RIGHT',
+        imageWidthPx: 1600,
+        imageHeightPx: 1000,
+        anchorsUv: {
+          rearAxle: { u: 0.2, v: 0.7 },
+          frontAxle: { u: 0.78, v: 0.7 },
+          groundLineV: 0.5,
+          seatPocket: { u: 0.43, v: 0.38 },
+          footpeg: { u: 0.45, v: 0.48 },
+          handlebarGrip: { u: 0.64, v: 0.26 },
+        },
+      }).success
+    ).toBe(false);
+
+    expect(
+      MediaPresignSchema.safeParse({
+        bikeId: VALID_UUID,
+        mimeType: 'image/png',
+        sizeBytes: 2_000_000,
+      }).success
+    ).toBe(true);
+
+    expect(
+      MediaPresignSchema.safeParse({
+        bikeId: VALID_UUID,
+        mimeType: 'image/svg+xml',
+        sizeBytes: 1024,
+      }).success
+    ).toBe(false);
+
+    expect(
+      MediaPresignSchema.safeParse({
+        bikeId: VALID_UUID,
+        mimeType: 'image/jpeg',
+        sizeBytes: 6 * 1024 * 1024,
+      }).success
+    ).toBe(false);
+
+    const parsedFilter = BikeFilterQuerySchema.parse({
+      streetLegal: 'false',
+      heightCm: '168',
+      weightKg: '65',
+      bootType: 'MX_BOOTS',
+      fitFilter: 'FIT_WITH_MODS',
+    });
+    expect(parsedFilter.streetLegal).toBe(false);
+    expect(parsedFilter.heightCm).toBe(168);
+    expect(parsedFilter.bootType).toBe('MX_BOOTS');
   });
 });

@@ -3,6 +3,7 @@ import { ACCESSORY_CATEGORIES, PRODUCT_STATUSES } from '../enums.js';
 import {
   PaginationQuerySchema,
   PositiveVndAmountSchema,
+  QueryBooleanSchema,
   SlugSchema,
   UuidSchema,
   VndAmountSchema,
@@ -48,8 +49,15 @@ export const AccessoryUpdateSchema = AccessoryCreateSchema.omit({ sku: true, slu
 export const AccessoryFilterQuerySchema = PaginationQuerySchema.extend({
   category: z.nativeEnum(ACCESSORY_CATEGORIES).optional(),
   bikeId: UuidSchema.optional(),
-  inStock: z.coerce.boolean().optional(),
+  inStock: QueryBooleanSchema.optional(),
   search: z.string().trim().max(120).optional(),
+}).strict();
+
+export const AdminAccessoryFilterQuerySchema = PaginationQuerySchema.extend({
+  category: z.nativeEnum(ACCESSORY_CATEGORIES).optional(),
+  status: z.nativeEnum(PRODUCT_STATUSES).optional(),
+  search: z.string().trim().max(120).optional(),
+  includeDeleted: QueryBooleanSchema.default(false),
 }).strict();
 
 export const BikeCompatibilityItemSchema = z

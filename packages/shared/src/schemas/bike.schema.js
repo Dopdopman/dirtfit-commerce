@@ -10,6 +10,7 @@ import {
 import {
   PaginationQuerySchema,
   PositiveVndAmountSchema,
+  QueryBooleanSchema,
   SlugSchema,
   UuidSchema,
   VndAmountSchema,
@@ -96,11 +97,17 @@ export const BikeFilterQuerySchema = PaginationQuerySchema.extend({
   category: z.nativeEnum(BIKE_CATEGORIES).optional(),
   ridingFocus: z.nativeEnum(RIDING_FOCUSES).optional(),
   brandSlug: SlugSchema.optional(),
+  brand: SlugSchema.optional(),
   minPrice: z.coerce.number().int().nonnegative().optional(),
   maxPrice: z.coerce.number().int().positive().optional(),
-  streetLegal: z.coerce.boolean().optional(),
+  streetLegal: QueryBooleanSchema.optional(),
   search: z.string().trim().max(120).optional(),
   riderHeightCm: z.coerce
+    .number()
+    .min(RIDER_LIMITS.heightCm.min)
+    .max(RIDER_LIMITS.heightCm.max)
+    .optional(),
+  heightCm: z.coerce
     .number()
     .min(RIDER_LIMITS.heightCm.min)
     .max(RIDER_LIMITS.heightCm.max)
@@ -110,12 +117,46 @@ export const BikeFilterQuerySchema = PaginationQuerySchema.extend({
     .min(RIDER_LIMITS.weightKg.min)
     .max(RIDER_LIMITS.weightKg.max)
     .optional(),
+  weightKg: z.coerce
+    .number()
+    .min(RIDER_LIMITS.weightKg.min)
+    .max(RIDER_LIMITS.weightKg.max)
+    .optional(),
   riderInseamCm: z.coerce
     .number()
     .min(RIDER_LIMITS.inseamCm.min)
     .max(RIDER_LIMITS.inseamCm.max)
     .optional(),
+  inseamCm: z.coerce
+    .number()
+    .min(RIDER_LIMITS.inseamCm.min)
+    .max(RIDER_LIMITS.inseamCm.max)
+    .optional(),
   footwear: z.nativeEnum(FOOTWEAR_TYPES).optional(),
+  bootType: z.nativeEnum(FOOTWEAR_TYPES).optional(),
   minFitStatus: z.enum(['FLAT_FOOT', 'BALLS_OF_FEET', 'TIP_TOE', 'ONE_FOOT_SHIFT']).optional(),
-  includeModdable: z.coerce.boolean().default(false),
+  fitFilter: z
+    .enum([
+      'ALL',
+      'FLAT_FOOT',
+      'BALLS_OF_FEET',
+      'TIP_TOE',
+      'ONE_FOOT_SHIFT',
+      'FIT_NOW',
+      'FIT_WITH_MODS',
+    ])
+    .optional(),
+  includeModdable: QueryBooleanSchema.default(false),
+  sortBy: z
+    .enum(['fitScore', 'priceAsc', 'priceDesc', 'newest', 'seatHeightAsc', 'seatHeightDesc'])
+    .optional(),
+}).strict();
+
+export const AdminBikeFilterQuerySchema = PaginationQuerySchema.extend({
+  status: z.nativeEnum(PRODUCT_STATUSES).optional(),
+  category: z.nativeEnum(BIKE_CATEGORIES).optional(),
+  ridingFocus: z.nativeEnum(RIDING_FOCUSES).optional(),
+  brandSlug: SlugSchema.optional(),
+  search: z.string().trim().max(120).optional(),
+  includeDeleted: QueryBooleanSchema.default(false),
 }).strict();

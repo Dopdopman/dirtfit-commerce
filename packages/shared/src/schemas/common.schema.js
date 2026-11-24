@@ -21,3 +21,7 @@ export const PaginationQuerySchema = z
   .strict();
 
 export const SortDirectionSchema = z.enum(['asc', 'desc']).default('desc');
+
+export const QueryBooleanSchema = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+  .transform((val) => val === true || val === 'true' || val === '1');

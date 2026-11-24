@@ -99,9 +99,9 @@ flowchart TD
   - Smart Rider-Fit Filter integrated into `GET /api/v1/bikes`.
   - Automatic in-transaction `AuditLog` + `BigInt -> Number` Repository mapping across all endpoints.
 - **Definition of Done (DoD):**
-  - [ ] `GET /api/v1/bikes?riderHeightCm=168&riderWeightKg=65&footwear=MX_BOOTS&includeModdable=true` returns accurate `fitPreview` results in `< 30ms` locally.
-  - [ ] Integration tests verify disguised uploads (e.g., `.exe` renamed `.png` or `.svg`) are rejected (`422`) and deleted from storage.
-  - [ ] Admin price/stock mutations record `AuditLog` entries with `beforeState` and `afterState`.
+  - [x] `GET /api/v1/bikes?riderHeightCm=168&riderWeightKg=65&footwear=MX_BOOTS&includeModdable=true` returns accurate `fitPreview` results in `< 30ms` locally.
+  - [x] Integration tests verify disguised uploads (e.g., `.exe` renamed `.png` or `.svg`) are rejected (`422`) and deleted from storage.
+  - [x] Admin price/stock mutations record `AuditLog` entries with `beforeState` and `afterState`.
 
 ---
 
