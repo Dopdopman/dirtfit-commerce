@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { buildParametricWireframe, worldToSvg } from '@dirtfit/ergonomics-engine';
 import ParametricBikeSvg from '@/components/simulator/ParametricBikeSvg';
-import { getCategoryLabel, getFitStatusMeta, formatVnd } from '@/lib/formatters';
+import { formatVnd, getCategoryLabel, getFitStatusMeta } from '@/lib/formatters';
+import { useI18n } from '@/providers/I18nProvider';
 
 const CARD_VIEWPORT = Object.freeze({
   originSvgX: 72,
@@ -16,6 +19,8 @@ const CARD_VIEWPORT = Object.freeze({
  * @returns {import('react').JSX.Element}
  */
 export default function BikeCard({ bike }) {
+  const { locale, t } = useI18n();
+
   let svgWireframe = null;
   if (bike.geometrySpec) {
     const wireframeMm = buildParametricWireframe(bike.geometrySpec);
@@ -42,7 +47,7 @@ export default function BikeCard({ bike }) {
     };
   }
 
-  const fitMeta = bike.fitPreview ? getFitStatusMeta(bike.fitPreview.contactStatus) : null;
+  const fitMeta = bike.fitPreview ? getFitStatusMeta(bike.fitPreview.contactStatus, locale) : null;
 
   return (
     <Link
@@ -80,7 +85,7 @@ export default function BikeCard({ bike }) {
             </span>
             {bike.fitPreview.isModdableToFit && (
               <span className="inline-flex w-fit rounded-sm border border-line-strong bg-surface px-2 py-0.5 text-[10px] font-medium text-ink">
-                Hợp khi lắp kit hạ yên
+                {t('catalog.afterModsLabel')} Fit
               </span>
             )}
           </div>
@@ -100,14 +105,18 @@ export default function BikeCard({ bike }) {
           <h3 className="mt-1 font-display text-lg font-bold tracking-tight text-ink group-hover:text-signal">
             {bike.name}
           </h3>
-          <p className="mt-0.5 text-xs text-ink-muted">{getCategoryLabel(bike.category)}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{getCategoryLabel(bike.category, locale)}</p>
         </div>
 
         <div className="mt-4">
           <div className="flex items-center gap-3 border-y border-line py-2 text-xs text-ink-secondary tabular-telemetry">
-            <span>{bike.geometrySpec?.unladenSeatHeightMm ?? '—'} mm yên</span>
+            <span>
+              {bike.geometrySpec?.unladenSeatHeightMm ?? '—'} mm {t('catalog.seatLabel')}
+            </span>
             <span className="text-line-strong">·</span>
-            <span>{bike.engineCc} cc</span>
+            <span>
+              {bike.engineCc} {t('bikeDetail.ccUnit')}
+            </span>
             <span className="text-line-strong">·</span>
             <span>{bike.geometrySpec?.wetWeightKg ?? '—'} kg</span>
           </div>
@@ -115,14 +124,16 @@ export default function BikeCard({ bike }) {
           <div className="mt-3 flex items-baseline justify-between">
             <div>
               <div className="text-base font-bold text-ink tabular-telemetry">
-                {formatVnd(bike.priceVnd)}
+                {formatVnd(bike.priceVnd, locale)}
               </div>
               <div className="text-[11px] text-ink-muted tabular-telemetry">
-                Cọc giữ xe: {formatVnd(bike.depositAmountVnd)}
+                {t('catalog.depositFrom', { amount: formatVnd(bike.depositAmountVnd, locale) })}
               </div>
             </div>
             <span className="text-xs font-semibold text-ink-secondary">
-              {bike.availableQty > 0 ? `Còn ${bike.availableQty} xe` : 'Hết hàng'}
+              {bike.availableQty > 0
+                ? t('common.unitsLeft', { count: bike.availableQty })
+                : t('common.outOfStock')}
             </span>
           </div>
         </div>

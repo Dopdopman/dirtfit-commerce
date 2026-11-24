@@ -3,6 +3,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { formatMm, formatVnd, getCategoryLabel, getRidingFocusLabel } from '@/lib/formatters';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Slide-over technical specification drawer powered by Radix Dialog (Tier 3 Progressive Disclosure).
@@ -13,26 +14,42 @@ import { formatMm, formatVnd, getCategoryLabel, getRidingFocusLabel } from '@/li
  * @returns {import('react').JSX.Element}
  */
 export default function SpecDrawer({ bike, open, onOpenChange }) {
+  const { locale, t } = useI18n();
   const g = bike?.geometrySpec ?? {};
 
   const rows = [
-    ['Phân khúc', getCategoryLabel(bike.category)],
-    ['Mục tiêu vận hành', getRidingFocusLabel(bike.ridingFocus)],
-    ['Động cơ', `${bike.engineCc} cc`],
-    ['Lưu thông đường phố', bike.streetLegal ? 'Có đăng kiểm (Street Legal)' : 'Chuyên trường đua'],
-    ['Chiều cao yên tĩnh', formatMm(g.unladenSeatHeightMm)],
-    ['Độ rộng mặt yên', formatMm(g.seatWidthMm)],
-    ['Chiều dài cơ sở (Wheelbase)', formatMm(g.wheelbaseMm)],
-    ['Khoảng sáng gầm', formatMm(g.groundClearanceMm)],
-    ['Hành trình phuộc trước', formatMm(g.frontTravelMm)],
-    ['Hành trình phuộc sau', formatMm(g.rearTravelMm)],
-    ['Static Sag trước / sau', `${g.staticSagFrontMm ?? '—'} / ${g.staticSagRearMm ?? '—'} mm`],
-    ['Cỡ vành trước / sau', `${g.frontWheelDiameterIn ?? '—'}" / ${g.rearWheelDiameterIn ?? '—'}"`],
-    ['Góc lái (Rake) / Trail', `${g.rakeDeg ?? '—'}° / ${g.trailMm ?? '—'} mm`],
-    ['Trọng lượng ướt', `${g.wetWeightKg ?? '—'} kg`],
-    ['Dung tích bình xăng', `${g.fuelCapacityL ?? '—'} L`],
-    ['Giá niêm yết', formatVnd(bike.priceVnd)],
-    ['Tiền cọc giữ xe', formatVnd(bike.depositAmountVnd)],
+    [t('adminBikeDetail.fields.category'), getCategoryLabel(bike.category, locale)],
+    [t('adminBikeDetail.fields.ridingFocus'), getRidingFocusLabel(bike.ridingFocus, locale)],
+    ['Engine', `${bike.engineCc} ${t('bikeDetail.ccUnit')}`],
+    [
+      t('common.status'),
+      bike.streetLegal ? t('common.streetLegalYes') : t('common.trackOnlyNoPlate'),
+    ],
+    [t('bikeDetail.specRows.unladenSeatHeightMm'), formatMm(g.unladenSeatHeightMm)],
+    [t('bikeDetail.specRows.seatWidthMm'), formatMm(g.seatWidthMm)],
+    [t('bikeDetail.specRows.wheelbaseMm'), formatMm(g.wheelbaseMm)],
+    [t('bikeDetail.specRows.groundClearanceMm'), formatMm(g.groundClearanceMm)],
+    [t('bikeDetail.specRows.frontTravelMm'), formatMm(g.frontTravelMm)],
+    [t('bikeDetail.specRows.rearTravelMm'), formatMm(g.rearTravelMm)],
+    [
+      `${t('bikeDetail.specRows.staticSagFrontMm')} / ${t('bikeDetail.specRows.staticSagRearMm')}`,
+      `${g.staticSagFrontMm ?? '—'} / ${g.staticSagRearMm ?? '—'} mm`,
+    ],
+    [
+      `${t('bikeDetail.specRows.frontWheelDiameterIn')} / ${t('bikeDetail.specRows.rearWheelDiameterIn')}`,
+      `${g.frontWheelDiameterIn ?? '—'}" / ${g.rearWheelDiameterIn ?? '—'}"`,
+    ],
+    [
+      `${t('bikeDetail.specRows.rakeDeg')} / ${t('bikeDetail.specRows.trailMm')}`,
+      `${g.rakeDeg ?? '—'}° / ${g.trailMm ?? '—'} mm`,
+    ],
+    [t('bikeDetail.specRows.wetWeightKg'), `${g.wetWeightKg ?? '—'} kg`],
+    [t('bikeDetail.specRows.fuelCapacityL'), `${g.fuelCapacityL ?? '—'} L`],
+    [t('common.price'), formatVnd(bike.priceVnd, locale)],
+    [
+      t('bikeDetail.depositLabel', { amount: '' }).replace(/:\s*$/, ''),
+      formatVnd(bike.depositAmountVnd, locale),
+    ],
   ];
 
   return (
@@ -43,14 +60,14 @@ export default function SpecDrawer({ bike, open, onOpenChange }) {
           <div className="flex items-center justify-between border-b border-line px-6 py-4">
             <div>
               <Dialog.Title className="font-display text-lg font-bold text-ink">
-                Bảng thông số kỹ thuật đầy đủ
+                {t('bikeDetail.drawerTitle')}
               </Dialog.Title>
               <Dialog.Description className="text-xs text-ink-muted">
-                {bike.name} · SKU {bike.sku}
+                {t('bikeDetail.drawerSubtitle', { name: bike.name, sku: bike.sku })}
               </Dialog.Description>
             </div>
             <Dialog.Close
-              aria-label="Đóng bảng thông số"
+              aria-label={t('common.close')}
               className="rounded-sm border border-line p-1.5 text-ink-secondary hover:border-line-strong hover:text-ink"
             >
               <X className="h-4 w-4" />

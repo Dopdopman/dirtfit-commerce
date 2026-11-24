@@ -8,6 +8,7 @@ import {
   setAccessToken,
 } from '@/lib/api-client';
 import { DEFAULT_RIDER_PROFILE } from '@/lib/simulator-helpers';
+import { useI18n } from '@/providers/I18nProvider';
 
 const AuthContext = createContext(null);
 const RiderProfileContext = createContext(null);
@@ -22,6 +23,7 @@ const RIDER_PROFILE_STORAGE_KEY = 'dirtfit_guest_rider_profile_v1';
  * @returns {import('react').JSX.Element}
  */
 export default function AppProviders({ children }) {
+  const { t } = useI18n();
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [riderProfile, setRiderProfileState] = useState(DEFAULT_RIDER_PROFILE);
@@ -173,10 +175,10 @@ export default function AppProviders({ children }) {
         body: payload,
       });
       setCart(data.cart);
-      showToast('Đã thêm sản phẩm vào giỏ hàng.', 'success');
+      showToast(t('toasts.addedToCart'), 'success');
       return data.cart;
     },
-    [showToast]
+    [showToast, t]
   );
 
   const addComboBundle = useCallback(
@@ -186,10 +188,10 @@ export default function AppProviders({ children }) {
         body: { bikeId, accessoryIds, quantity },
       });
       setCart(data.cart);
-      showToast('Đã thêm Combo Xe + Phụ kiện vào giỏ hàng.', 'success');
+      showToast(t('toasts.addedBundleToCart', { count: accessoryIds?.length ?? 0 }), 'success');
       return data.cart;
     },
-    [showToast]
+    [showToast, t]
   );
 
   const updateItemQty = useCallback(async (itemId, quantity) => {

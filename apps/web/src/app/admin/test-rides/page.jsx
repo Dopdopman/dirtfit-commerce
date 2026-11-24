@@ -2,31 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
-import { ApiError, apiRequest } from '@/lib/api-client';
-
-const SHOWROOM_OPTIONS = [
-  { value: '', label: 'Tất cả Showroom' },
-  { value: 'HN_LONG_BIEN', label: 'Hà Nội — Long Biên' },
-  { value: 'DN_SON_TRA', label: 'Đà Nẵng — Sơn Trà' },
-  { value: 'HCM_THU_DUC', label: 'TP.HCM — Thủ Đức' },
-];
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'Tất cả trạng thái' },
-  { value: 'PENDING', label: 'Chờ xác nhận (PENDING)' },
-  { value: 'CONFIRMED', label: 'Đã xác nhận (CONFIRMED)' },
-  { value: 'COMPLETED', label: 'Hoàn tất (COMPLETED)' },
-  { value: 'CANCELLED', label: 'Đã hủy (CANCELLED)' },
-  { value: 'NO_SHOW', label: 'Vắng mặt (NO_SHOW)' },
-];
-
-const STATUS_BADGE = {
-  PENDING: 'border-warning-border bg-warning-soft text-warning',
-  CONFIRMED: 'border-signal bg-signal-soft text-signal',
-  COMPLETED: 'border-safe-border bg-safe-soft text-safe',
-  CANCELLED: 'border-line bg-canvas text-ink-muted',
-  NO_SHOW: 'border-danger-border bg-danger-soft text-danger',
-};
+import { SHOWROOM_CODES, TEST_RIDE_STATUSES } from '@dirtfit/shared';
+import { apiRequest } from '@/lib/api-client';
+import { getShowroomMeta, getTestRideStatusMeta } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Admin & Sales Test Ride Bookings management page (`/admin/test-rides`).
@@ -34,6 +14,7 @@ const STATUS_BADGE = {
  * @returns {import('react').JSX.Element}
  */
 export default function AdminTestRidesPage() {
+  const { locale, t } = useI18n();
   const [bookings, setBookings] = useState([]);
   const [showroomCode, setShowroomCode] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -55,13 +36,11 @@ export default function AdminTestRidesPage() {
       const res = await apiRequest(`/api/v1/admin/test-rides?${qs.toString()}`);
       setBookings(res.data ?? []);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.detail || err.message : 'Không thể tải danh sách lái thử.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setLoading(false);
     }
-  }, [showroomCode, statusFilter, dateFilter]);
+  }, [showroomCode, statusFilter, dateFilter, locale]);
 
   useEffect(() => {
     loadBookings();
@@ -76,12 +55,10 @@ export default function AdminTestRidesPage() {
         method: 'PATCH',
         body: { status: nextStatus },
       });
-      setFeedback(`Đã cập nhật trạng thái lịch lái thử sang ${nextStatus}.`);
+      setFeedback(`${bookingId.slice(0, 8)} -> ${nextStatus}`);
       await loadBookings();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.detail || err.message : 'Không thể cập nhật lịch lái thử.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setBusyId('');
     }
@@ -91,10 +68,10 @@ export default function AdminTestRidesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Quản lý Lịch Lái thử</h1>
-          <p className="mt-1 text-sm text-ink-secondary">
-            Điều phối lịch tại 3 showroom (Long Biên, Sơn Trà, Thủ Đức) và xác nhận setup yên/phuộc.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">
+            {t('adminTestRides.title')}
+          </h1>
+          <p className="mt-1 text-sm text-ink-secondary">{t('adminTestRides.subtitle')}</p>
         </div>
         <button
           type="button"
@@ -103,44 +80,52 @@ export default function AdminTestRidesPage() {
           className="inline-flex items-center gap-2 rounded-sm border border-line-strong bg-surface px-3.5 py-2 text-xs font-semibold text-ink hover:bg-canvas"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Tải lại
+          {t('common.reload')}
         </button>
       </div>
 
       {/* Filters */}
       <div className="grid gap-3 rounded-sm border border-line bg-surface p-4 sm:grid-cols-4">
         <label className="space-y-1 text-xs">
-          <span className="font-semibold uppercase tracking-wider text-ink-muted">Showroom</span>
+          <span className="font-semibold uppercase tracking-wider text-ink-muted">
+            {t('adminTestRides.filterShowroom')}
+          </span>
           <select
             value={showroomCode}
             onChange={(e) => setShowroomCode(e.target.value)}
             className="w-full rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
           >
-            {SHOWROOM_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            <option value="">{t('adminTestRides.allShowrooms')}</option>
+            {Object.values(SHOWROOM_CODES).map((code) => (
+              <option key={code} value={code}>
+                {getShowroomMeta(code, locale).shortName}
               </option>
             ))}
           </select>
         </label>
 
         <label className="space-y-1 text-xs">
-          <span className="font-semibold uppercase tracking-wider text-ink-muted">Trạng thái</span>
+          <span className="font-semibold uppercase tracking-wider text-ink-muted">
+            {t('adminTestRides.filterStatus')}
+          </span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="w-full rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
           >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            <option value="">{t('adminTestRides.allStatuses')}</option>
+            {Object.values(TEST_RIDE_STATUSES).map((st) => (
+              <option key={st} value={st}>
+                {getTestRideStatusMeta(st, locale).label} ({st})
               </option>
             ))}
           </select>
         </label>
 
         <label className="space-y-1 text-xs">
-          <span className="font-semibold uppercase tracking-wider text-ink-muted">Ngày hẹn</span>
+          <span className="font-semibold uppercase tracking-wider text-ink-muted">
+            {t('adminTestRides.filterDate')}
+          </span>
           <input
             type="date"
             value={dateFilter}
@@ -159,7 +144,7 @@ export default function AdminTestRidesPage() {
             }}
             className="w-full rounded-sm border border-line-strong bg-canvas px-3 py-2 text-xs font-semibold text-ink hover:bg-surface"
           >
-            Xóa bộ lọc
+            {t('common.clearFilters')}
           </button>
         </div>
       </div>
@@ -180,27 +165,26 @@ export default function AdminTestRidesPage() {
         <table className="w-full text-left text-xs">
           <thead className="border-b border-line bg-canvas text-[11px] uppercase tracking-wider text-ink-muted">
             <tr>
-              <th className="px-4 py-3">Ngày & Khung giờ</th>
-              <th className="px-4 py-3">Showroom</th>
-              <th className="px-4 py-3">Mẫu xe</th>
-              <th className="px-4 py-3">Khách hàng / Bằng lái</th>
-              <th className="px-4 py-3">Thông số Fit Snapshot</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3 text-right">Thao tác</th>
+              <th className="px-4 py-3">{t('adminTestRides.colDateTime')}</th>
+              <th className="px-4 py-3">{t('adminTestRides.colShowroom')}</th>
+              <th className="px-4 py-3">{t('adminTestRides.colBike')}</th>
+              <th className="px-4 py-3">{t('adminTestRides.colCustomer')}</th>
+              <th className="px-4 py-3">{t('adminTestRides.colFitSnapshot')}</th>
+              <th className="px-4 py-3">{t('adminTestRides.colStatus')}</th>
+              <th className="px-4 py-3 text-right">{t('adminTestRides.colActions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {bookings.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-ink-muted">
-                  {loading ? 'Đang tải dữ liệu...' : 'Không có lịch lái thử nào phù hợp bộ lọc.'}
+                  {loading ? t('common.loading') : t('adminTestRides.empty')}
                 </td>
               </tr>
             ) : (
               bookings.map((ride) => {
                 const profile = ride.riderProfileSnapshot;
-                const badgeClass =
-                  STATUS_BADGE[ride.status] || 'border-line bg-canvas text-ink-secondary';
+                const statusMeta = getTestRideStatusMeta(ride.status, locale);
                 const canConfirm = ride.status === 'PENDING';
                 const canComplete = ride.status === 'PENDING' || ride.status === 'CONFIRMED';
                 const canCancel = ride.status === 'PENDING' || ride.status === 'CONFIRMED';
@@ -214,17 +198,15 @@ export default function AdminTestRidesPage() {
                       <div className="mt-0.5 text-[11px] text-ink-muted">{ride.timeSlot}</div>
                     </td>
                     <td className="px-4 py-3 font-mono text-[11px] text-ink-secondary">
-                      {ride.showroomCode}
+                      {getShowroomMeta(ride.showroomCode, locale).shortName}
                     </td>
                     <td className="px-4 py-3 font-medium text-ink">
                       {ride.bike?.name || ride.bikeId}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-ink">
-                        {ride.user?.fullName || 'Khách hàng'}
-                      </p>
+                      <p className="font-semibold text-ink">{ride.user?.fullName || '—'}</p>
                       <p className="font-mono text-[11px] text-ink-muted">
-                        {ride.user?.phone || ride.user?.email} · Hạng {ride.licenseClass}
+                        {ride.user?.phone || ride.user?.email} · {ride.licenseClass}
                       </p>
                     </td>
                     <td className="px-4 py-3 font-mono text-[11px] text-ink-secondary tabular-telemetry">
@@ -232,13 +214,13 @@ export default function AdminTestRidesPage() {
                         ? `${profile.heightCm}cm / ${profile.weightKg}kg${
                             profile.inseamCm ? ` / Inseam ${profile.inseamCm}cm` : ''
                           }`
-                        : 'Không đính kèm'}
+                        : t('adminTestRides.noSnapshot')}
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-block rounded-sm border px-2 py-0.5 font-mono text-[10px] font-semibold ${badgeClass}`}
+                        className={`inline-block rounded-sm border px-2 py-0.5 font-mono text-[10px] font-semibold ${statusMeta.toneClass}`}
                       >
-                        {ride.status}
+                        {statusMeta.label}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -251,7 +233,7 @@ export default function AdminTestRidesPage() {
                             className="inline-flex items-center gap-1 rounded-sm border border-signal bg-signal-soft px-2 py-1 text-[11px] font-semibold text-signal hover:bg-signal hover:text-surface disabled:opacity-50"
                           >
                             <CheckCircle2 className="h-3 w-3" />
-                            Xác nhận
+                            {t('adminTestRides.confirmBtn')}
                           </button>
                         )}
                         {canComplete && (
@@ -261,7 +243,7 @@ export default function AdminTestRidesPage() {
                             onClick={() => handleStatusUpdate(ride.id, 'COMPLETED')}
                             className="rounded-sm border border-safe-border bg-safe-soft px-2 py-1 text-[11px] font-semibold text-safe hover:opacity-90 disabled:opacity-50"
                           >
-                            Hoàn tất
+                            {t('adminTestRides.completeBtn')}
                           </button>
                         )}
                         {canCancel && (
@@ -272,7 +254,7 @@ export default function AdminTestRidesPage() {
                               onClick={() => handleStatusUpdate(ride.id, 'NO_SHOW')}
                               className="rounded-sm border border-warning-border bg-warning-soft px-2 py-1 text-[11px] font-semibold text-warning hover:opacity-90 disabled:opacity-50"
                             >
-                              Vắng mặt
+                              {t('adminTestRides.noShowBtn')}
                             </button>
                             <button
                               type="button"
@@ -281,7 +263,7 @@ export default function AdminTestRidesPage() {
                               className="inline-flex items-center gap-1 rounded-sm border border-danger-border bg-danger-soft px-2 py-1 text-[11px] font-semibold text-danger hover:opacity-90 disabled:opacity-50"
                             >
                               <XCircle className="h-3 w-3" />
-                              Hủy
+                              {t('adminTestRides.cancelBtn')}
                             </button>
                           </>
                         )}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Quick Rider-Fit entry bar on Homepage routing directly into filtered /bikes catalog.
@@ -12,6 +13,7 @@ import { useRiderProfile } from '@/providers/AppProviders';
 export default function QuickFitBar() {
   const router = useRouter();
   const { riderProfile, setRiderProfile } = useRiderProfile();
+  const { t } = useI18n();
 
   const [heightCm, setHeightCm] = useState(riderProfile.heightCm ?? 168);
   const [weightKg, setWeightKg] = useState(riderProfile.weightKg ?? 65);
@@ -48,7 +50,7 @@ export default function QuickFitBar() {
     >
       <div className="sm:col-span-3">
         <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Chiều cao (cm)
+          {t('quickFit.heightLabel')}
         </label>
         <input
           type="number"
@@ -62,7 +64,7 @@ export default function QuickFitBar() {
 
       <div className="sm:col-span-2">
         <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Cân nặng (kg)
+          {t('quickFit.weightLabel')}
         </label>
         <input
           type="number"
@@ -76,32 +78,32 @@ export default function QuickFitBar() {
 
       <div className="sm:col-span-2">
         <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Giày bảo hộ
+          {t('quickFit.footwearLabel')}
         </label>
         <select
           value={bootType}
           onChange={(e) => setBootType(e.target.value)}
           className="mt-1.5 w-full rounded-sm border border-line bg-canvas px-2.5 py-2 text-sm text-ink focus:border-line-strong focus:outline-none"
         >
-          <option value="MX_BOOTS">MX Boots</option>
-          <option value="ADV_BOOTS">ADV Boots</option>
-          <option value="SNEAKERS">Giày thường</option>
+          <option value="MX_BOOTS">{t('enums.footwear.MX_BOOTS')}</option>
+          <option value="ADV_BOOTS">{t('enums.footwear.ADV_BOOTS')}</option>
+          <option value="SNEAKERS">{t('enums.footwear.SNEAKERS')}</option>
         </select>
       </div>
 
       <div className="sm:col-span-2">
         <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Địa hình
+          {t('quickFit.terrainLabel')}
         </label>
         <select
           value={ridingFocus}
           onChange={(e) => setRidingFocus(e.target.value)}
           className="mt-1.5 w-full rounded-sm border border-line bg-canvas px-2.5 py-2 text-sm text-ink focus:border-line-strong focus:outline-none"
         >
-          <option value="ALL">Tất cả dòng xe</option>
-          <option value="OFF_ROAD">Chuyên Off-Road</option>
-          <option value="ON_OFF_MIXED">Dual-Sport Hỗn hợp</option>
-          <option value="ON_ROAD_ADV">On-Road / Adventure</option>
+          <option value="ALL">{t('quickFit.allTerrains')}</option>
+          <option value="OFF_ROAD">{t('enums.ridingFocus.OFF_ROAD')}</option>
+          <option value="ON_OFF_MIXED">{t('enums.ridingFocus.ON_OFF_MIXED')}</option>
+          <option value="ON_ROAD_ADV">{t('enums.ridingFocus.ON_ROAD_ADV')}</option>
         </select>
       </div>
 
@@ -110,7 +112,7 @@ export default function QuickFitBar() {
           type="submit"
           className="flex w-full items-center justify-center gap-2 rounded-sm bg-signal px-4 py-2.5 text-sm font-bold text-surface transition-colors hover:bg-signal-hover"
         >
-          <span>Tìm xe hợp vóc dáng</span>
+          <span>{t('quickFit.submitBtn')}</span>
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>

@@ -6,7 +6,9 @@ import { CheckCircle2, Lock, ShieldAlert } from 'lucide-react';
 import { ShippingAddressSchema } from '@dirtfit/shared';
 import { apiRequest } from '@/lib/api-client';
 import { formatVnd, getOrderStatusMeta } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth, useCart, useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * 1-Page Checkout with Idempotency-Key, COD rule enforcement, and non-prod Mock payment completion.
@@ -16,6 +18,7 @@ export default function CheckoutPage() {
   const { user, authReady } = useAuth();
   const { cart, refreshCart } = useCart();
   const { riderProfile } = useRiderProfile();
+  const { locale, t } = useI18n();
 
   const [idempotencyKey, setIdempotencyKey] = useState(() =>
     typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ck-${Date.now()}`
@@ -25,8 +28,8 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState({
     recipientName: '',
     phone: '',
-    province: 'TP. Hồ Chí Minh',
-    district: 'TP. Thủ Đức',
+    province: 'TP. Ho Chi Minh',
+    district: 'Thu Duc',
     ward: 'Linh Trung',
     streetAddress: '',
   });
@@ -72,9 +75,7 @@ export default function CheckoutPage() {
 
     const validatedAddress = ShippingAddressSchema.safeParse(address);
     if (!validatedAddress.success) {
-      setErrorMsg(
-        validatedAddress.error.issues[0]?.message || 'Vui lòng kiểm tra lại thông tin giao nhận.'
-      );
+      setErrorMsg(validatedAddress.error.issues[0]?.message || t('common.errorGeneric'));
       return;
     }
 
@@ -97,7 +98,7 @@ export default function CheckoutPage() {
       setPaymentIntent(result.payment);
       await refreshCart();
     } catch (err) {
-      setErrorMsg(err?.detail || 'Không thể tạo đơn hàng.');
+      setErrorMsg(localizeApiError(err, locale));
       if (err?.code === 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH' && crypto?.randomUUID) {
         setIdempotencyKey(crypto.randomUUID());
       }
@@ -120,7 +121,7 @@ export default function CheckoutPage() {
       });
       setPlacedOrder(res.order);
     } catch (err) {
-      setErrorMsg(err?.detail || 'Không thể hoàn tất thanh toán giả lập.');
+      setErrorMsg(localizeApiError(err, locale));
     } finally {
       setCompletingMock(false);
     }
@@ -129,7 +130,7 @@ export default function CheckoutPage() {
   if (!authReady) {
     return (
       <div className="mx-auto max-w-[1360px] px-4 py-10 text-sm text-ink-secondary sm:px-6">
-        Đang kiểm tra phiên đăng nhập...
+        {t('common.loading')}
       </div>
     );
   }
@@ -140,16 +141,14 @@ export default function CheckoutPage() {
         <div className="border border-line-strong bg-surface p-8 text-center">
           <Lock className="mx-auto h-7 w-7 text-signal" />
           <h1 className="mt-3 font-display text-2xl font-bold text-ink">
-            Đăng nhập để hoàn tất đặt hàng
+            {t('checkout.authRequiredTitle')}
           </h1>
-          <p className="mt-2 text-sm text-ink-secondary">
-            Giỏ hàng hiện tại của bạn sẽ được đồng bộ tự động ngay khi đăng nhập.
-          </p>
+          <p className="mt-2 text-sm text-ink-secondary">{t('checkout.authRequiredBody')}</p>
           <Link
             href="/login?next=/checkout"
             className="mt-5 inline-block rounded-sm bg-signal px-6 py-2.5 text-sm font-bold text-surface hover:bg-signal-hover"
           >
-            Đăng nhập ngay
+            {t('checkout.loginCta')}
           </Link>
         </div>
       </div>
@@ -157,7 +156,7 @@ export default function CheckoutPage() {
   }
 
   if (placedOrder) {
-    const statusMeta = getOrderStatusMeta(placedOrder.status);
+    const statusMeta = getOrderStatusMeta(placedOrder.status, locale);
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
         <div className="border border-line-strong bg-surface p-8">
@@ -165,7 +164,7 @@ export default function CheckoutPage() {
             <CheckCircle2 className="h-7 w-7 text-fit-flat" />
             <div>
               <div className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-                ĐƠN HÀNG ĐÃ ĐƯỢC TẠO
+                {t('checkout.successTitle')}
               </div>
               <h1 className="font-display text-2xl font-extrabold text-ink tabular-telemetry">
                 {placedOrder.orderNumber}
@@ -175,7 +174,7 @@ export default function CheckoutPage() {
 
           <div className="mt-5 grid gap-3 border-y border-line py-4 text-sm sm:grid-cols-3">
             <div>
-              <div className="text-xs text-ink-muted">Trạng thái</div>
+              <div className="text-xs text-ink-muted">{t('common.status')}</div>
               <span
                 className={`mt-1 inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${statusMeta.className}`}
               >
@@ -183,15 +182,15 @@ export default function CheckoutPage() {
               </span>
             </div>
             <div>
-              <div className="text-xs text-ink-muted">Cần thanh toán</div>
+              <div className="text-xs text-ink-muted">{t('checkout.payableNow')}</div>
               <div className="mt-1 font-bold text-signal tabular-telemetry">
-                {formatVnd(placedOrder.payableNowVnd)}
+                {formatVnd(placedOrder.payableNowVnd, locale)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-ink-muted">Còn lại khi bàn giao</div>
+              <div className="text-xs text-ink-muted">{t('checkout.remainingBalance')}</div>
               <div className="mt-1 font-bold text-ink tabular-telemetry">
-                {formatVnd(placedOrder.remainingBalanceVnd)}
+                {formatVnd(placedOrder.remainingBalanceVnd, locale)}
               </div>
             </div>
           </div>
@@ -205,7 +204,7 @@ export default function CheckoutPage() {
           {placedOrder.status === 'PENDING_PAYMENT' && (
             <div className="mt-5 space-y-3 border border-line bg-canvas p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-ink">
-                Cổng thanh toán: {placedOrder.paymentMethod}
+                {t('checkout.paymentMethodTitle')}: {placedOrder.paymentMethod}
               </div>
               {paymentIntent?.qrCodeData && (
                 <div className="break-all rounded-sm border border-line bg-surface p-2 text-xs text-ink-secondary tabular-telemetry">
@@ -219,9 +218,7 @@ export default function CheckoutPage() {
                   onClick={handleCompleteMockPayment}
                   className="w-full rounded-sm bg-signal px-4 py-2.5 text-sm font-bold text-surface hover:bg-signal-hover disabled:opacity-50"
                 >
-                  {completingMock
-                    ? 'Đang xử lý webhook thanh toán...'
-                    : 'Giả lập hoàn tất thanh toán ngay (Local / Test)'}
+                  {completingMock ? t('checkout.payingMock') : t('checkout.payNowMockBtn')}
                 </button>
               )}
             </div>
@@ -232,13 +229,13 @@ export default function CheckoutPage() {
               href="/account"
               className="rounded-sm bg-ink px-5 py-2.5 text-sm font-bold text-surface hover:bg-signal"
             >
-              Theo dõi đơn hàng trong Tài khoản
+              {t('checkout.viewAccountOrders')}
             </Link>
             <Link
               href="/bikes"
               className="rounded-sm border border-line-strong bg-surface px-5 py-2.5 text-sm font-semibold text-ink hover:bg-canvas"
             >
-              Tiếp tục xem xe
+              {t('cart.continueShopping')}
             </Link>
           </div>
         </div>
@@ -250,18 +247,18 @@ export default function CheckoutPage() {
     <div className="mx-auto max-w-[1360px] px-4 py-10 sm:px-6">
       <div className="mb-6 border-b border-line pb-4">
         <div className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-          THANH TOÁN AN TOÀN · IDEMPOTENT CHECKOUT
+          {t('checkout.kicker')}
         </div>
         <h1 className="mt-1 font-display text-3xl font-extrabold text-ink">
-          Xác nhận thông tin đặt cọc & giao hàng
+          {t('checkout.title')}
         </h1>
       </div>
 
       {(cart?.items?.length ?? 0) === 0 ? (
         <div className="border border-line bg-surface p-8 text-sm text-ink-secondary">
-          Giỏ hàng đang trống.{' '}
+          {t('checkout.emptyCartTitle')}.{' '}
           <Link href="/bikes" className="font-semibold text-signal underline">
-            Chọn xe hoặc phụ kiện trước khi thanh toán.
+            {t('cart.browseBikes')}
           </Link>
         </div>
       ) : (
@@ -269,11 +266,13 @@ export default function CheckoutPage() {
           <div className="space-y-6 lg:col-span-7">
             <div className="border border-line bg-surface p-6">
               <h2 className="font-display text-lg font-bold text-ink">
-                1. Địa chỉ nhận xe / phụ tùng
+                1. {t('checkout.shippingTitle')}
               </h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-ink-secondary">Người nhận</label>
+                  <label className="block text-xs font-medium text-ink-secondary">
+                    {t('checkout.recipientName')}
+                  </label>
                   <input
                     required
                     value={address.recipientName}
@@ -283,7 +282,7 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-secondary">
-                    Số điện thoại
+                    {t('checkout.phone')}
                   </label>
                   <input
                     required
@@ -295,7 +294,7 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-secondary">
-                    Tỉnh / Thành phố
+                    {t('checkout.province')}
                   </label>
                   <input
                     required
@@ -306,7 +305,7 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-secondary">
-                    Quận / Huyện
+                    {t('checkout.district')}
                   </label>
                   <input
                     required
@@ -317,11 +316,10 @@ export default function CheckoutPage() {
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-ink-secondary">
-                    Địa chỉ chi tiết
+                    {t('checkout.streetAddress')}
                   </label>
                   <input
                     required
-                    placeholder="Số nhà, tên đường, phường..."
                     value={address.streetAddress}
                     onChange={(e) => setAddress({ ...address, streetAddress: e.target.value })}
                     className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm"
@@ -329,12 +327,11 @@ export default function CheckoutPage() {
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-ink-secondary">
-                    Ghi chú kỹ thuật (tùy chọn)
+                    {t('checkout.customerNote')}
                   </label>
                   <input
                     value={customerNote}
                     onChange={(e) => setCustomerNote(e.target.value)}
-                    placeholder="Ví dụ: Cân chỉnh sẵn Sag cho người lái 65kg..."
                     className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm"
                   />
                 </div>
@@ -343,7 +340,7 @@ export default function CheckoutPage() {
 
             <div className="border border-line bg-surface p-6">
               <h2 className="font-display text-lg font-bold text-ink">
-                2. Hình thức & Cổng thanh toán
+                2. {t('checkout.orderTypeTitle')} &amp; {t('checkout.paymentMethodTitle')}
               </h2>
 
               {hasBike && (
@@ -357,9 +354,11 @@ export default function CheckoutPage() {
                         : 'border-line bg-canvas'
                     }`}
                   >
-                    <div className="text-sm font-bold text-ink">Đặt cọc giữ xe</div>
+                    <div className="text-sm font-bold text-ink">
+                      {t('checkout.orderTypes.BIKE_DEPOSIT.label')}
+                    </div>
                     <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                      Trả trước {formatVnd(cart.summary.depositPayableNowVnd)}
+                      {formatVnd(cart.summary.depositPayableNowVnd, locale)}
                     </div>
                   </button>
                   <button
@@ -371,9 +370,11 @@ export default function CheckoutPage() {
                         : 'border-line bg-canvas'
                     }`}
                   >
-                    <div className="text-sm font-bold text-ink">Thanh toán 100%</div>
+                    <div className="text-sm font-bold text-ink">
+                      {t('checkout.orderTypes.FULL_PURCHASE.label')}
+                    </div>
                     <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                      Trả trọn {formatVnd(cart.summary.totalVnd)}
+                      {formatVnd(cart.summary.totalVnd, locale)}
                     </div>
                   </button>
                 </div>
@@ -390,7 +391,7 @@ export default function CheckoutPage() {
                       onChange={() => setPaymentMethod('MOCK')}
                       className="accent-signal"
                     />
-                    <span>Mock Payment Gateway (Local / Test Sandbox)</span>
+                    <span>{t('checkout.paymentMethods.MOCK.label')}</span>
                   </span>
                 </label>
 
@@ -404,7 +405,7 @@ export default function CheckoutPage() {
                       onChange={() => setPaymentMethod('PAYOS')}
                       className="accent-signal"
                     />
-                    <span>PayOS VietQR (Chuyển khoản tức thời)</span>
+                    <span>{t('checkout.paymentMethods.PAYOS.label')}</span>
                   </span>
                 </label>
 
@@ -425,11 +426,11 @@ export default function CheckoutPage() {
                       onChange={() => setPaymentMethod('COD')}
                       className="accent-signal"
                     />
-                    <span>Thanh toán khi nhận hàng (COD)</span>
+                    <span>{t('checkout.paymentMethods.COD.label')}</span>
                   </span>
                   {!codAllowed && (
                     <span className="text-[11px] font-medium text-fit-unsafe">
-                      Cấm COD với đơn có xe máy / &gt;20tr ₫
+                      {t('checkout.paymentMethods.COD.desc')}
                     </span>
                   )}
                 </label>
@@ -438,21 +439,23 @@ export default function CheckoutPage() {
           </div>
 
           <aside className="h-fit border border-line-strong bg-surface p-6 lg:col-span-5">
-            <h2 className="font-display text-lg font-bold text-ink">Chi tiết thanh toán</h2>
+            <h2 className="font-display text-lg font-bold text-ink">
+              {t('checkout.summaryTitle')}
+            </h2>
             <dl className="mt-4 space-y-2 border-y border-line py-4 text-sm">
               <div className="flex justify-between">
-                <dt className="text-ink-secondary">Số lượng sản phẩm</dt>
+                <dt className="text-ink-secondary">{t('cart.summaryTitle')}</dt>
                 <dd className="tabular-telemetry">{cart.itemCount}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-secondary">Tổng đơn hàng</dt>
+                <dt className="text-ink-secondary">{t('checkout.totalOrderValue')}</dt>
                 <dd className="font-semibold tabular-telemetry">
-                  {formatVnd(cart.summary.totalVnd)}
+                  {formatVnd(cart.summary.totalVnd, locale)}
                 </dd>
               </div>
               <div className="flex justify-between pt-2 text-base font-bold text-signal">
-                <dt>Số tiền thanh toán ngay</dt>
-                <dd className="tabular-telemetry">{formatVnd(payablePreview)}</dd>
+                <dt>{t('checkout.payableNow')}</dt>
+                <dd className="tabular-telemetry">{formatVnd(payablePreview, locale)}</dd>
               </div>
             </dl>
 
@@ -472,7 +475,7 @@ export default function CheckoutPage() {
               disabled={submitting}
               className="mt-5 w-full rounded-sm bg-signal px-5 py-3 text-sm font-bold text-surface hover:bg-signal-hover disabled:opacity-50"
             >
-              {submitting ? 'Đang khóa tồn kho & tạo đơn...' : 'Xác nhận đặt đơn'}
+              {submitting ? t('checkout.submitting') : t('checkout.submitOrder')}
             </button>
           </aside>
         </form>

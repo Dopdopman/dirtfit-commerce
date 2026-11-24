@@ -6,6 +6,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import BikeCard from '@/components/ui/BikeCard';
 import { apiRequest } from '@/lib/api-client';
 import { useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Interactive Dual Filter Catalog: Terrain/Category/Brand + Smart Rider-Fit Filter.
@@ -18,6 +19,7 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { riderProfile, setRiderProfile } = useRiderProfile();
+  const { t } = useI18n();
 
   const initialHasFit = searchParams.has('heightCm') || searchParams.has('riderHeightCm');
 
@@ -106,11 +108,11 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
         <div className="grid gap-3 md:grid-cols-5">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-              Tìm theo tên / SKU
+              {t('common.search')}
             </label>
             <input
               type="text"
-              placeholder="Ví dụ: KTM, CRF300L..."
+              placeholder="KTM, CRF300L..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none"
@@ -119,47 +121,47 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-              Phân khúc xe
+              {t('adminBikeDetail.fields.category')}
             </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm text-ink"
             >
-              <option value="">Tất cả phân khúc</option>
-              <option value="MOTOCROSS">Motocross</option>
-              <option value="ENDURO">Enduro</option>
-              <option value="DUAL_SPORT">Dual-Sport</option>
-              <option value="ADVENTURE">Adventure</option>
+              <option value="">{t('catalog.allCategories')}</option>
+              <option value="MOTOCROSS">{t('enums.categories.MOTOCROSS')}</option>
+              <option value="ENDURO">{t('enums.categories.ENDURO')}</option>
+              <option value="DUAL_SPORT">{t('enums.categories.DUAL_SPORT')}</option>
+              <option value="ADVENTURE">{t('enums.categories.ADVENTURE')}</option>
             </select>
           </div>
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-              Địa hình vận hành
+              {t('quickFit.terrainLabel')}
             </label>
             <select
               value={ridingFocus}
               onChange={(e) => setRidingFocus(e.target.value)}
               className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm text-ink"
             >
-              <option value="">Tất cả địa hình</option>
-              <option value="OFF_ROAD">Chuyên Off-Road</option>
-              <option value="ON_OFF_MIXED">On / Off-Road Hỗn hợp</option>
-              <option value="ON_ROAD_ADV">On-Road / Adventure</option>
+              <option value="">{t('quickFit.allTerrains')}</option>
+              <option value="OFF_ROAD">{t('enums.ridingFocus.OFF_ROAD')}</option>
+              <option value="ON_OFF_MIXED">{t('enums.ridingFocus.ON_OFF_MIXED')}</option>
+              <option value="ON_ROAD_ADV">{t('enums.ridingFocus.ON_ROAD_ADV')}</option>
             </select>
           </div>
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-              Hãng sản xuất
+              {t('catalog.brandLabel')}
             </label>
             <select
               value={brandSlug}
               onChange={(e) => setBrandSlug(e.target.value)}
               className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm text-ink"
             >
-              <option value="">Tất cả hãng</option>
+              <option value="">{t('catalog.allBrands')}</option>
               {brands.map((brand) => (
                 <option key={brand.id} value={brand.slug}>
                   {brand.name}
@@ -179,7 +181,10 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
               }`}
             >
               <SlidersHorizontal className="h-4 w-4" />
-              <span>{fitEnabled ? 'Đang lọc Rider-Fit' : 'Lọc theo vóc dáng'}</span>
+              <span>
+                {t('catalog.smartFitTitle')} (
+                {fitEnabled ? t('catalog.enabled') : t('catalog.disabled')})
+              </span>
             </button>
           </div>
         </div>
@@ -189,7 +194,7 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
           <div className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-2">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-                Chiều cao (cm)
+                {t('catalog.heightCm')}
               </label>
               <input
                 type="number"
@@ -203,7 +208,7 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
 
             <div className="sm:col-span-2">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-                Cân nặng (kg)
+                {t('catalog.weightKg')}
               </label>
               <input
                 type="number"
@@ -217,33 +222,33 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
 
             <div className="sm:col-span-2">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-                Giày bảo hộ
+                {t('catalog.bootsLabel')}
               </label>
               <select
                 value={bootType}
                 onChange={(e) => setBootType(e.target.value)}
                 className="mt-1 w-full rounded-sm border border-line bg-canvas px-2.5 py-1.5 text-sm"
               >
-                <option value="MX_BOOTS">MX Boots</option>
-                <option value="ADV_BOOTS">ADV Boots</option>
-                <option value="SNEAKERS">Giày thường</option>
+                <option value="MX_BOOTS">{t('enums.footwear.MX_BOOTS')}</option>
+                <option value="ADV_BOOTS">{t('enums.footwear.ADV_BOOTS')}</option>
+                <option value="SNEAKERS">{t('enums.footwear.SNEAKERS')}</option>
               </select>
             </div>
 
             <div className="sm:col-span-3">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-                Ngưỡng chống chân
+                {t('catalog.fitFilterLabel')}
               </label>
               <select
                 value={fitFilter}
                 onChange={(e) => setFitFilter(e.target.value)}
                 className="mt-1 w-full rounded-sm border border-line bg-canvas px-2.5 py-1.5 text-sm"
               >
-                <option value="ALL">Xếp hạng tất cả theo Fit Score</option>
-                <option value="FIT_WITH_MODS">Chống chân ổn (kể cả khi lắp hạ yên)</option>
-                <option value="FIT_NOW">Chống chân được ngay ở cấu hình zin</option>
-                <option value="BALLS_OF_FEET">Từ ức bàn chân trở lên</option>
-                <option value="FLAT_FOOT">Chỉ xe chống phẳng cả bàn chân</option>
+                <option value="ALL">{t('catalog.fitOptions.ALL')}</option>
+                <option value="FIT_WITH_MODS">{t('catalog.fitOptions.FIT_WITH_MODS')}</option>
+                <option value="FIT_NOW">{t('catalog.fitOptions.FIT_NOW')}</option>
+                <option value="BALLS_OF_FEET">{t('catalog.fitOptions.BALLS_OF_FEET')}</option>
+                <option value="FLAT_FOOT">{t('catalog.fitOptions.FLAT_FOOT')}</option>
               </select>
             </div>
 
@@ -255,14 +260,14 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
                   onChange={(e) => setIncludeModdable(e.target.checked)}
                   className="h-4 w-4 accent-signal"
                 />
-                <span>Gồm xe lắp kit hạ phuộc</span>
+                <span>{t('catalog.fitOptions.FIT_WITH_MODS')}</span>
               </label>
               <button
                 type="button"
                 onClick={handleReset}
                 className="text-xs font-semibold text-ink-muted underline hover:text-ink"
               >
-                Xóa lọc
+                {t('common.clearFilters')}
               </button>
             </div>
           </div>
@@ -271,18 +276,19 @@ export default function BikeCatalogClient({ initialBikes, brands }) {
 
       {/* Results Header */}
       <div className="flex items-center justify-between text-xs text-ink-secondary">
-        <span>
-          Hiển thị <strong className="text-ink tabular-telemetry">{bikes.length}</strong> mẫu xe
-          {fitEnabled ? ' (đã sắp xếp theo Fit Score giảm dần)' : ''}
+        <span className="font-semibold text-ink tabular-telemetry">
+          {t('catalog.countResults', { count: bikes.length })}
+          {fitEnabled
+            ? ` · ${t('catalog.activeProfileNote', { height: heightCm, weight: weightKg })}`
+            : ''}
         </span>
-        {loading && <span className="text-signal">Đang tính toán vóc dáng...</span>}
+        {loading && <span className="text-signal">{t('catalog.calculating')}</span>}
       </div>
 
       {/* Bike Grid */}
       {bikes.length === 0 ? (
         <div className="border border-line bg-surface p-10 text-center text-sm text-ink-secondary">
-          Không tìm thấy mẫu xe phù hợp bộ lọc hiện tại. Hãy nới lỏng ngưỡng chống chân hoặc bật tùy
-          chọn kèm kit hạ yên.
+          {t('catalog.emptyState')}
         </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

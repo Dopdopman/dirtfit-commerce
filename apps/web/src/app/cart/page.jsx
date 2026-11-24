@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { formatVnd } from '@/lib/formatters';
 import { useCart } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Shopping Cart page separating bike deposits, installation labor, and COD eligibility.
@@ -11,6 +12,7 @@ import { useCart } from '@/providers/AppProviders';
  */
 export default function CartPage() {
   const { cart, cartLoading, updateItemQty, removeItem, clearCart } = useCart();
+  const { locale, t } = useI18n();
 
   const items = cart?.items ?? [];
   const summary = cart?.summary ?? {
@@ -27,11 +29,12 @@ export default function CartPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-4">
         <div>
           <div className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-            GIỎ HÀNG & COMBO ĐƠN HÀNG
+            {t('cart.kicker')}
           </div>
           <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-ink">
-            Giỏ hàng của bạn ({cart?.itemCount ?? 0})
+            {t('cart.title')} ({cart?.itemCount ?? 0})
           </h1>
+          <p className="mt-1 text-xs text-ink-secondary">{t('cart.subtitle')}</p>
         </div>
 
         {items.length > 0 && (
@@ -40,30 +43,31 @@ export default function CartPage() {
             onClick={clearCart}
             className="text-xs font-semibold text-ink-muted underline hover:text-fit-unsafe"
           >
-            Xóa toàn bộ giỏ hàng
+            {t('cart.clearCart')}
           </button>
         )}
       </div>
 
       {cartLoading && items.length === 0 ? (
         <div className="border border-line bg-surface p-8 text-sm text-ink-secondary">
-          Đang tải giỏ hàng...
+          {t('common.loading')}
         </div>
       ) : items.length === 0 ? (
         <div className="border border-line bg-surface p-10 text-center">
-          <p className="text-sm text-ink-secondary">Giỏ hàng của bạn hiện đang trống.</p>
+          <p className="text-base font-semibold text-ink">{t('cart.emptyTitle')}</p>
+          <p className="mt-1 text-sm text-ink-secondary">{t('cart.emptyBody')}</p>
           <div className="mt-5 flex justify-center gap-3">
             <Link
               href="/bikes"
               className="rounded-sm bg-signal px-5 py-2.5 text-sm font-bold text-surface hover:bg-signal-hover"
             >
-              Khám phá danh mục xe
+              {t('cart.browseBikes')}
             </Link>
             <Link
               href="/accessories"
               className="rounded-sm border border-line-strong bg-surface px-5 py-2.5 text-sm font-semibold text-ink hover:bg-canvas"
             >
-              Xem phụ kiện hạ yên
+              {t('cart.browseAccessories')}
             </Link>
           </div>
         </div>
@@ -80,7 +84,9 @@ export default function CartPage() {
                     <span
                       className={item.itemType === 'BIKE' ? 'text-signal' : 'text-ink-secondary'}
                     >
-                      {item.itemType === 'BIKE' ? 'XE MÁY ĐỊA HÌNH' : 'PHỤ KIỆN / HẠ YÊN'}
+                      {item.itemType === 'BIKE'
+                        ? t('cart.itemTypeBike')
+                        : t('cart.itemTypeAccessory')}
                     </span>
                     {item.bundleGroupId && (
                       <span className="rounded-sm border border-signal/30 bg-orange-50 px-1.5 py-0.5 text-[10px] text-signal">
@@ -89,17 +95,18 @@ export default function CartPage() {
                     )}
                   </div>
                   <h2 className="mt-1 font-display text-lg font-bold text-ink">
-                    {item.product?.name ?? 'Sản phẩm'}
+                    {item.product?.name ?? item.itemType}
                   </h2>
                   <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                    Đơn giá: {formatVnd(item.unitPriceVnd)}
-                    {item.installLaborVnd > 0 && ` · Công lắp: ${formatVnd(item.installLaborVnd)}`}
-                    {item.itemType === 'BIKE' && ` · Cọc: ${formatVnd(item.depositAmountVnd)}/xe`}
+                    {t('cart.unitPrice')}: {formatVnd(item.unitPriceVnd, locale)}
+                    {item.installLaborVnd > 0 && ` · +${formatVnd(item.installLaborVnd, locale)}`}
+                    {item.itemType === 'BIKE' &&
+                      ` · ${t('bikeDetail.depositLabel', { amount: formatVnd(item.depositAmountVnd, locale) })}`}
                   </div>
                   <div className="mt-1 text-[11px] text-ink-muted tabular-telemetry">
                     {item.inStock
-                      ? `Sẵn kho: ${item.availableQty}`
-                      : `Cảnh báo: chỉ còn ${item.availableQty} trong kho`}
+                      ? t('cart.availableHint', { avail: item.availableQty })
+                      : t('cart.stockWarning', { avail: item.availableQty, qty: item.quantity })}
                   </div>
                 </div>
 
@@ -107,7 +114,7 @@ export default function CartPage() {
                   <div className="flex items-center border border-line bg-canvas">
                     <button
                       type="button"
-                      aria-label="Giảm số lượng"
+                      aria-label="-"
                       disabled={item.quantity <= 1}
                       onClick={() => updateItemQty(item.id, item.quantity - 1)}
                       className="p-2 text-ink-secondary hover:text-ink disabled:opacity-40"
@@ -119,7 +126,7 @@ export default function CartPage() {
                     </span>
                     <button
                       type="button"
-                      aria-label="Tăng số lượng"
+                      aria-label="+"
                       disabled={item.quantity >= item.availableQty}
                       onClick={() => updateItemQty(item.id, item.quantity + 1)}
                       className="p-2 text-ink-secondary hover:text-ink disabled:opacity-40"
@@ -128,13 +135,13 @@ export default function CartPage() {
                     </button>
                   </div>
 
-                  <div className="w-32 text-right font-bold text-ink tabular-telemetry">
-                    {formatVnd(item.lineTotalVnd)}
+                  <div className="w-36 text-right font-bold text-ink tabular-telemetry">
+                    {formatVnd(item.lineTotalVnd, locale)}
                   </div>
 
                   <button
                     type="button"
-                    aria-label="Xóa khỏi giỏ"
+                    aria-label={t('common.delete')}
                     onClick={() => removeItem(item.id)}
                     className="p-1.5 text-ink-muted hover:text-fit-unsafe"
                   >
@@ -147,52 +154,52 @@ export default function CartPage() {
 
           {/* Summary Panel */}
           <aside className="h-fit border border-line-strong bg-surface p-6 lg:col-span-4">
-            <h2 className="font-display text-lg font-bold text-ink">Tóm tắt đơn hàng</h2>
+            <h2 className="font-display text-lg font-bold text-ink">{t('cart.summaryTitle')}</h2>
 
             <dl className="mt-4 space-y-2.5 border-y border-line py-4 text-sm">
               <div className="flex justify-between">
-                <dt className="text-ink-secondary">Tạm tính hàng hóa</dt>
-                <dd className="font-medium tabular-telemetry">{formatVnd(summary.subtotalVnd)}</dd>
+                <dt className="text-ink-secondary">{t('cart.subtotalLabel')}</dt>
+                <dd className="font-medium tabular-telemetry">
+                  {formatVnd(summary.subtotalVnd, locale)}
+                </dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-secondary">Công lắp đặt tại xưởng</dt>
+                <dt className="text-ink-secondary">{t('adminBikeDetail.compatCols.labor')}</dt>
                 <dd className="font-medium tabular-telemetry">
-                  {formatVnd(summary.installLaborTotalVnd)}
+                  {formatVnd(summary.installLaborTotalVnd, locale)}
                 </dd>
               </div>
               <div className="flex justify-between border-t border-line pt-2.5 text-base font-bold text-ink">
-                <dt>Tổng giá trị đơn</dt>
-                <dd className="tabular-telemetry">{formatVnd(summary.totalVnd)}</dd>
+                <dt>{t('checkout.totalOrderValue')}</dt>
+                <dd className="tabular-telemetry">{formatVnd(summary.totalVnd, locale)}</dd>
               </div>
               {cart?.hasBike && (
                 <>
                   <div className="flex justify-between text-signal">
-                    <dt className="font-semibold">Thanh toán cọc ngay</dt>
+                    <dt className="font-semibold">{t('checkout.payableNow')}</dt>
                     <dd className="font-bold tabular-telemetry">
-                      {formatVnd(summary.depositPayableNowVnd)}
+                      {formatVnd(summary.depositPayableNowVnd, locale)}
                     </dd>
                   </div>
                   <div className="flex justify-between text-xs text-ink-muted">
-                    <dt>Thanh toán khi nhận xe</dt>
-                    <dd className="tabular-telemetry">{formatVnd(summary.remainingBalanceVnd)}</dd>
+                    <dt>{t('checkout.remainingBalance')}</dt>
+                    <dd className="tabular-telemetry">
+                      {formatVnd(summary.remainingBalanceVnd, locale)}
+                    </dd>
                   </div>
                 </>
               )}
             </dl>
 
             <div className="mt-4 text-xs text-ink-secondary">
-              {cart?.hasBike
-                ? 'Lưu ý: Đơn hàng có xe máy bắt buộc đặt cọc/thanh toán online (PayOS VietQR hoặc Mock Sandbox), không hỗ trợ COD.'
-                : summary.codEligible
-                  ? 'Đơn thuần phụ kiện dưới 20.000.000 ₫ đủ điều kiện thanh toán COD.'
-                  : 'Đơn phụ kiện vượt quá hạn mức COD 20.000.000 ₫, vui lòng thanh toán online.'}
+              {cart?.hasBike ? t('cart.bikeDepositNote') : t('cart.accessoryCodNote')}
             </div>
 
             <Link
               href="/checkout"
               className="mt-5 block w-full rounded-sm bg-signal px-5 py-3 text-center text-sm font-bold text-surface hover:bg-signal-hover"
             >
-              Tiến hành thanh toán
+              {t('cart.proceedCheckout')}
             </Link>
           </aside>
         </div>

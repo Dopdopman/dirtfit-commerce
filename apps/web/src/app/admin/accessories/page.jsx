@@ -5,9 +5,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Edit3, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ACCESSORY_CATEGORIES, PRODUCT_STATUSES } from '@dirtfit/shared';
 import { buildAccessoryErgoImpactFromForm, canAccessAdminOnlyFeature } from '@/lib/admin-helpers';
-import { ApiError, apiRequest } from '@/lib/api-client';
+import { apiRequest } from '@/lib/api-client';
 import { formatVnd } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 const INITIAL_ACC_FORM = {
   sku: '',
@@ -31,6 +33,7 @@ const INITIAL_ACC_FORM = {
  */
 export default function AdminAccessoriesPage() {
   const { user } = useAuth();
+  const { locale, t } = useI18n();
   const isAdmin = canAccessAdminOnlyFeature(user?.role);
 
   const [items, setItems] = useState([]);
@@ -55,13 +58,11 @@ export default function AdminAccessoriesPage() {
       const res = await apiRequest(`/api/v1/admin/accessories?${qs.toString()}`);
       setItems(res.data ?? []);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.detail || err.message : 'Không thể tải danh sách phụ tùng.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setLoading(false);
     }
-  }, [search, categoryFilter]);
+  }, [search, categoryFilter, locale]);
 
   useEffect(() => {
     loadAccessories();
@@ -124,7 +125,7 @@ export default function AdminAccessoriesPage() {
           method: 'PATCH',
           body,
         });
-        setFeedback(`Đã cập nhật phụ tùng "${form.name}".`);
+        setFeedback(t('common.save'));
       } else {
         await apiRequest('/api/v1/admin/accessories', {
           method: 'POST',
@@ -140,17 +141,13 @@ export default function AdminAccessoriesPage() {
             ergoImpactJson,
           },
         });
-        setFeedback(`Đã tạo phụ tùng mới "${form.name}".`);
+        setFeedback(form.name.trim());
       }
 
       setModalOpen(false);
       await loadAccessories();
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? `[${err.code}] ${err.detail || err.message}`
-          : 'Thao tác thất bại.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setSubmitting(false);
     }
@@ -158,7 +155,7 @@ export default function AdminAccessoriesPage() {
 
   const handleDelete = async (acc) => {
     if (!isAdmin) return;
-    if (!window.confirm(`Xác nhận ẩn/soft-delete phụ tùng "${acc.name}"?`)) {
+    if (!window.confirm(t('adminAccessories.confirmDelete', { name: acc.name }))) {
       return;
     }
     setError('');
@@ -167,10 +164,10 @@ export default function AdminAccessoriesPage() {
       await apiRequest(`/api/v1/admin/accessories/${acc.id}`, {
         method: 'DELETE',
       });
-      setFeedback(`Đã xóa mềm "${acc.name}".`);
+      setFeedback(acc.name);
       await loadAccessories();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể xóa mềm phụ tùng.');
+      setError(localizeApiError(err, locale));
     }
   };
 
@@ -179,12 +176,9 @@ export default function AdminAccessoriesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink">
-            Quản lý Phụ tùng &amp; Thông số Ergonomic
+            {t('adminAccessories.title')}
           </h1>
-          <p className="mt-1 text-sm text-ink-secondary">
-            Quản lý kho phụ kiện và mức tác động hình học (`loweringLinkMm`, `lowSeatMm`,
-            `barRiserMm`...) dùng trong Simulator.
-          </p>
+          <p className="mt-1 text-sm text-ink-secondary">{t('adminAccessories.subtitle')}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -194,7 +188,7 @@ export default function AdminAccessoriesPage() {
             className="inline-flex items-center gap-1.5 rounded-sm border border-line-strong bg-surface px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Tải lại
+            {t('common.reload')}
           </button>
           {isAdmin && (
             <button
@@ -203,7 +197,7 @@ export default function AdminAccessoriesPage() {
               className="inline-flex items-center gap-1.5 rounded-sm bg-ink px-3.5 py-2 text-xs font-semibold text-surface hover:bg-signal"
             >
               <Plus className="h-4 w-4" />
-              Thêm phụ tùng
+              {t('adminAccessories.addBtn')}
             </button>
           )}
         </div>
@@ -215,7 +209,7 @@ export default function AdminAccessoriesPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo tên hoặc SKU..."
+          placeholder={t('adminAccessories.searchPlaceholder')}
           className="rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
         />
         <select
@@ -223,7 +217,7 @@ export default function AdminAccessoriesPage() {
           onChange={(e) => setCategoryFilter(e.target.value)}
           className="rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
         >
-          <option value="">Tất cả loại phụ tùng</option>
+          <option value="">{t('adminAccessories.allCategories')}</option>
           {Object.values(ACCESSORY_CATEGORIES).map((cat) => (
             <option key={cat} value={cat}>
               {cat}
@@ -238,7 +232,7 @@ export default function AdminAccessoriesPage() {
           }}
           className="rounded-sm border border-line-strong bg-canvas px-3 py-2 text-xs font-semibold text-ink hover:bg-surface"
         >
-          Xóa bộ lọc
+          {t('common.clearFilters')}
         </button>
       </div>
 
@@ -258,20 +252,20 @@ export default function AdminAccessoriesPage() {
         <table className="w-full text-left text-xs">
           <thead className="border-b border-line bg-canvas text-[11px] uppercase tracking-wider text-ink-muted">
             <tr>
-              <th className="px-4 py-3">SKU / Tên phụ tùng</th>
-              <th className="px-4 py-3">Loại</th>
-              <th className="px-4 py-3">Tác động Ergo</th>
-              <th className="px-4 py-3 text-right">Giá bán</th>
-              <th className="px-4 py-3 text-right">Khả dụng / Kho</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3 text-right">Thao tác</th>
+              <th className="px-4 py-3">{t('adminAccessories.colSkuName')}</th>
+              <th className="px-4 py-3">{t('adminAccessories.colType')}</th>
+              <th className="px-4 py-3">{t('adminAccessories.colErgo')}</th>
+              <th className="px-4 py-3 text-right">{t('adminAccessories.colPrice')}</th>
+              <th className="px-4 py-3 text-right">{t('adminAccessories.colStock')}</th>
+              <th className="px-4 py-3">{t('common.status')}</th>
+              <th className="px-4 py-3 text-right">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {items.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-ink-muted">
-                  {loading ? 'Đang tải...' : 'Không có phụ tùng phù hợp.'}
+                  {loading ? t('common.loading') : t('adminAccessories.empty')}
                 </td>
               </tr>
             ) : (
@@ -290,7 +284,7 @@ export default function AdminAccessoriesPage() {
                     {acc.ergoImpactJson ? JSON.stringify(acc.ergoImpactJson) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-ink tabular-telemetry">
-                    {formatVnd(acc.priceVnd)}
+                    {formatVnd(acc.priceVnd, locale)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono tabular-telemetry">
                     <span className="font-bold text-ink">{acc.availableQty ?? acc.stockQty}</span> /{' '}
@@ -309,14 +303,14 @@ export default function AdminAccessoriesPage() {
                         className="inline-flex items-center gap-1 rounded-sm border border-line-strong bg-canvas px-2.5 py-1 text-[11px] font-semibold text-ink hover:border-signal hover:text-signal"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
-                        Sửa
+                        {t('common.edit')}
                       </button>
                       {isAdmin && (
                         <button
                           type="button"
                           onClick={() => handleDelete(acc)}
                           className="rounded-sm border border-danger-border bg-danger-soft p-1.5 text-danger"
-                          title="Xóa mềm"
+                          title={t('common.delete')}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -337,7 +331,9 @@ export default function AdminAccessoriesPage() {
           <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[95vw] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-sm border border-line bg-surface p-6 shadow-xl">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <Dialog.Title className="text-lg font-bold text-ink">
-                {editingItem ? `Cập nhật: ${editingItem.name}` : 'Thêm Phụ tùng mới'}
+                {editingItem
+                  ? t('adminAccessories.modalEdit', { name: editingItem.name })
+                  : t('adminAccessories.modalCreate')}
               </Dialog.Title>
               <Dialog.Close asChild>
                 <button type="button" className="rounded-sm border border-line p-1.5 text-ink">
@@ -372,7 +368,9 @@ export default function AdminAccessoriesPage() {
                 )}
 
                 <label className="space-y-1 sm:col-span-2">
-                  <span className="font-semibold text-ink-secondary">Tên phụ tùng</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminAccessories.colSkuName')}
+                  </span>
                   <input
                     required
                     disabled={Boolean(editingItem && !isAdmin)}
@@ -383,7 +381,9 @@ export default function AdminAccessoriesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Loại phụ tùng</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminAccessories.colType')}
+                  </span>
                   <select
                     disabled={Boolean(editingItem && !isAdmin)}
                     value={form.category}
@@ -399,7 +399,9 @@ export default function AdminAccessoriesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Thương hiệu</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('catalog.brandLabel')}
+                  </span>
                   <input
                     disabled={Boolean(editingItem && !isAdmin)}
                     value={form.brandName}
@@ -409,7 +411,9 @@ export default function AdminAccessoriesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Giá bán (VND)</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminAccessories.colPrice')} (VND)
+                  </span>
                   <input
                     type="number"
                     required
@@ -421,7 +425,7 @@ export default function AdminAccessoriesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Tồn kho</span>
+                  <span className="font-semibold text-ink-secondary">{t('common.stock')}</span>
                   <input
                     type="number"
                     min={0}
@@ -433,7 +437,7 @@ export default function AdminAccessoriesPage() {
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
-                  <span className="font-semibold text-ink-secondary">Trạng thái</span>
+                  <span className="font-semibold text-ink-secondary">{t('common.status')}</span>
                   <select
                     value={form.status}
                     onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
@@ -448,17 +452,17 @@ export default function AdminAccessoriesPage() {
                 </label>
               </div>
 
-              <div className="rounded-sm border border-line bg-canvas p-3 space-y-2">
+              <div className="space-y-2 rounded-sm border border-line bg-canvas p-3">
                 <p className="font-mono text-[11px] font-bold uppercase text-ink-muted">
-                  Tác động Ergonomics (`ergoImpactJson`, mm)
+                  {t('adminAccessories.ergoBoxTitle')}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {[
-                    ['loweringLinkMm', 'Link hạ phuộc (mm)'],
-                    ['lowSeatMm', 'Yên thấp (mm)'],
-                    ['forkDropMm', 'Hạ chảng ba (mm)'],
-                    ['barRiserMm', 'Nâng ghi-đông (mm)'],
-                    ['pegLowerMm', 'Hạ gác chân (mm)'],
+                    ['loweringLinkMm', t('adminAccessories.ergoFields.loweringLinkMm')],
+                    ['lowSeatMm', t('adminAccessories.ergoFields.lowSeatMm')],
+                    ['forkDropMm', t('adminAccessories.ergoFields.forkDropMm')],
+                    ['barRiserMm', t('adminAccessories.ergoFields.barRiserMm')],
+                    ['pegLowerMm', t('adminAccessories.ergoFields.pegLowerMm')],
                   ].map(([key, label]) => (
                     <label key={key} className="space-y-1">
                       <span className="text-[11px] text-ink-secondary">{label}</span>
@@ -481,7 +485,7 @@ export default function AdminAccessoriesPage() {
                     type="button"
                     className="rounded-sm border border-line-strong px-4 py-2 font-semibold text-ink"
                   >
-                    Hủy
+                    {t('common.cancel')}
                   </button>
                 </Dialog.Close>
                 <button
@@ -489,7 +493,7 @@ export default function AdminAccessoriesPage() {
                   disabled={submitting}
                   className="rounded-sm bg-ink px-4 py-2 font-semibold text-surface hover:bg-signal disabled:opacity-50"
                 >
-                  {submitting ? 'Đang lưu...' : editingItem ? 'Lưu cập nhật' : 'Tạo mới'}
+                  {submitting ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </form>

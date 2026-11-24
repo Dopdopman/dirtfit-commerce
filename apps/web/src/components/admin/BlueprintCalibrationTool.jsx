@@ -12,7 +12,7 @@ import {
   Upload,
 } from 'lucide-react';
 import RiderFigureSvg from '@/components/simulator/RiderFigureSvg';
-import { ApiError, apiRequest } from '@/lib/api-client';
+import { apiRequest } from '@/lib/api-client';
 import {
   CALIBRATION_ANCHOR_STEPS,
   DEFAULT_CALIBRATION_ANCHORS,
@@ -20,6 +20,8 @@ import {
   clientPointToUv,
   computeLiveCalibrationPreview,
 } from '@/lib/calibration-helpers';
+import { localizeApiError } from '@/lib/i18n/translate';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Interactive 2D Blueprint Upload (3-step Presign -> PUT -> Confirm) & 6-Anchor UV Calibration Tool.
@@ -31,6 +33,7 @@ import {
  * @returns {import('react').JSX.Element}
  */
 export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated }) {
+  const { locale, t } = useI18n();
   const mediaList = useMemo(() => bike.media ?? [], [bike.media]);
   const [selectedMediaId, setSelectedMediaId] = useState(
     () =>
@@ -40,7 +43,6 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       ''
   );
 
-  // Store local objectURLs for newly uploaded dev/local-mock files so immediate preview works even if cdn.dirtfit.vn is unmapped locally
   const [localPreviewUrls, setLocalPreviewUrls] = useState({});
   const [uploadMediaType, setUploadMediaType] = useState('SIDE_PROFILE_BLUEPRINT');
   const [uploadIsPrimary, setUploadIsPrimary] = useState(true);
@@ -185,14 +187,13 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
 
     setUploading(true);
     setUploadError('');
-    setUploadStatus('Đang xin quyền Presign Upload...');
+    setUploadStatus(t('calibration.uploadingBtn'));
 
     try {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
       const declaredMime = allowedTypes.includes(file.type) ? file.type : 'image/png';
       const dims = await readImageDimensions(file);
 
-      // Step 1: Presign
       const presignRes = await apiRequest('/api/v1/admin/media/presign', {
         method: 'POST',
         body: {
@@ -205,8 +206,6 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       });
       const presign = presignRes.data;
 
-      // Step 2: Binary PUT
-      setUploadStatus('Đang tải file nhị phân lên Storage...');
       const putRes = await fetch(presign.uploadUrl, {
         method: presign.method || 'PUT',
         headers: {
@@ -216,18 +215,16 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       });
 
       if (!putRes.ok) {
-        let detail = `Tải file thất bại (${putRes.status}).`;
+        let detail = `PUT upload failed (${putRes.status})`;
         try {
           const errJson = await putRes.json();
           detail = errJson.detail || errJson.message || detail;
         } catch {
-          // ignore parse errors
+          // ignore
         }
         throw new Error(detail);
       }
 
-      // Step 3: Confirm & 4KB Magic Bytes check
-      setUploadStatus('Đang kiểm tra 4KB Magic Bytes tại Server...');
       const confirmRes = await apiRequest('/api/v1/admin/media/confirm', {
         method: 'POST',
         body: {
@@ -253,17 +250,11 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       }
 
       setUploadStatus(
-        `Upload thành công (${confirmRes.data?.verifiedMime || declaredMime}, ${dims.widthPx}x${dims.heightPx}px).`
+        `${confirmRes.data?.verifiedMime || declaredMime} · ${dims.widthPx}x${dims.heightPx}px`
       );
       await onBikeUpdated();
     } catch (err) {
-      if (err instanceof ApiError) {
-        setUploadError(
-          `[${err.code || `HTTP_${err.status}`}] ${err.title ? `${err.title}: ` : ''}${err.detail || err.message}`
-        );
-      } else {
-        setUploadError(err instanceof Error ? err.message : 'Upload thất bại.');
-      }
+      setUploadError(localizeApiError(err, locale));
       setUploadStatus('');
     } finally {
       setUploading(false);
@@ -288,16 +279,12 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       const savedMetrics = res.data?.metrics;
       setCalFeedback(
         savedMetrics
-          ? `Đã lưu calibration! pxPerMm=${savedMetrics.pxPerMm}, sai số phối cảnh=${savedMetrics.perspectiveErrorPercent}%.`
-          : 'Đã lưu calibration UV thành công!'
+          ? `pxPerMm=${savedMetrics.pxPerMm} · perspectiveError=${savedMetrics.perspectiveErrorPercent}%`
+          : t('common.save')
       );
       await onBikeUpdated();
     } catch (err) {
-      if (err instanceof ApiError) {
-        setCalError(`[${err.code}] ${err.detail || err.message}`);
-      } else {
-        setCalError('Không thể lưu dữ liệu calibration.');
-      }
+      setCalError(localizeApiError(err, locale));
     } finally {
       setSavingCal(false);
     }
@@ -319,16 +306,13 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-ink">
-              Tải lên Ảnh xe / Blueprint ngang (Presign -&gt; PUT -&gt; 4KB Magic Bytes)
+              {t('calibration.uploadTitle')}
             </h3>
-            <p className="mt-0.5 text-xs text-ink-secondary">
-              Chỉ chấp nhận JPEG, PNG, WebP tối đa 5MB. Server tự động kiểm tra Magic Bytes và xóa
-              ngay file giả mạo.
-            </p>
+            <p className="mt-0.5 text-xs text-ink-secondary">{t('calibration.uploadSubtitle')}</p>
           </div>
           {!isAdmin && (
             <span className="rounded-sm border border-warning-border bg-warning-soft px-2.5 py-1 font-mono text-[11px] font-semibold text-warning">
-              CHẾ ĐỘ XEM (CHỈ ADMIN ĐƯỢC UPLOAD / CALIBRATE)
+              {t('calibration.readOnlyBadge')}
             </span>
           )}
         </div>
@@ -340,9 +324,11 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
             disabled={!isAdmin || uploading}
             className="rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
           >
-            <option value="SIDE_PROFILE_BLUEPRINT">SIDE_PROFILE_BLUEPRINT (Ảnh hiệu chuẩn)</option>
-            <option value="GALLERY">GALLERY (Ảnh thư viện)</option>
-            <option value="SPEC_SHEET">SPEC_SHEET (Bảng thông số)</option>
+            <option value="SIDE_PROFILE_BLUEPRINT">
+              {t('calibration.mediaTypes.SIDE_PROFILE_BLUEPRINT')}
+            </option>
+            <option value="GALLERY">{t('calibration.mediaTypes.GALLERY')}</option>
+            <option value="SPEC_SHEET">{t('calibration.mediaTypes.SPEC_SHEET')}</option>
           </select>
 
           <label className="inline-flex items-center gap-2 text-xs text-ink">
@@ -353,7 +339,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
               disabled={!isAdmin || uploading}
               className="accent-signal"
             />
-            Đặt làm Blueprint/Ảnh chính (isPrimary)
+            {t('calibration.setPrimary')}
           </label>
 
           <label
@@ -364,7 +350,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
             }`}
           >
             <Upload className="h-3.5 w-3.5" />
-            {uploading ? 'Đang xử lý...' : 'Chọn ảnh Upload'}
+            {uploading ? t('calibration.uploadingBtn') : t('calibration.pickFileBtn')}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -386,12 +372,10 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       {/* 2. Media Selector + Interactive Calibration Workbench */}
       {mediaList.length === 0 ? (
         <div className="rounded-sm border border-dashed border-line-strong bg-surface p-8 text-center text-sm text-ink-secondary">
-          Xe này chưa có ảnh hoặc blueprint nào. Hãy tải lên ảnh Side Profile để bắt đầu hiệu chuẩn
-          6 điểm neo UV.
+          {t('calibration.emptyMedia')}
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-12">
-          {/* Left 8 cols: Interactive UV Canvas */}
           <div className="space-y-3 xl:col-span-8">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface p-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -404,7 +388,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   {mediaList.map((m, idx) => (
                     <option key={m.id} value={m.id}>
                       #{idx + 1} · {m.mediaType} {m.isPrimary ? '(Primary)' : ''}{' '}
-                      {m.calibrationData ? '✓ Calibrated' : ''}
+                      {m.calibrationData ? '✓' : ''}
                     </option>
                   ))}
                 </select>
@@ -415,8 +399,8 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   disabled={!isAdmin}
                   className="rounded-sm border border-line bg-canvas px-2.5 py-1.5 font-mono text-xs text-ink"
                 >
-                  <option value="RIGHT">Hướng xe: RIGHT (Đầu xe bên phải)</option>
-                  <option value="LEFT">Hướng xe: LEFT (Đầu xe bên trái)</option>
+                  <option value="RIGHT">{t('calibration.facingRight')}</option>
+                  <option value="LEFT">{t('calibration.facingLeft')}</option>
                 </select>
               </div>
 
@@ -435,7 +419,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   ) : (
                     <EyeOff className="h-3.5 w-3.5" />
                   )}
-                  Overlay 170cm Rider
+                  {t('calibration.toggleRiderOverlay')}
                 </button>
 
                 {isAdmin && (
@@ -448,18 +432,20 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                     className="inline-flex items-center gap-1 rounded-sm border border-line bg-canvas px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-surface"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    Reset neo
+                    {t('calibration.resetAnchors')}
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Active Anchor Hint Banner */}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-signal/40 bg-signal-soft px-3 py-2 text-xs">
               <div className="flex items-center gap-2 font-medium text-ink">
                 <Crosshair className="h-4 w-4 text-signal" />
                 <span>
-                  Đang đặt điểm: <strong>{activeStep.label}</strong> — {activeStep.hint}
+                  {t('calibration.activeAnchorBanner', {
+                    label: t(activeStep.labelKey),
+                    hint: t(activeStep.hintKey),
+                  })}
                 </span>
               </div>
               <label className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-secondary">
@@ -469,11 +455,10 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   onChange={(e) => setAutoAdvance(e.target.checked)}
                   className="accent-signal"
                 />
-                Tự chuyển điểm kế tiếp sau khi click
+                {t('calibration.autoAdvance')}
               </label>
             </div>
 
-            {/* Canvas Container */}
             <div
               ref={canvasBoxRef}
               onPointerDown={handleCanvasPointerDown}
@@ -486,7 +471,6 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                 cursor: isAdmin ? 'crosshair' : 'default',
               }}
             >
-              {/* Background Technical Grid + Uploaded Image */}
               {resolvedImageSrc && (
                 <img
                   src={resolvedImageSrc}
@@ -496,12 +480,10 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                 />
               )}
 
-              {/* Precision Overlay SVG (exact 1:1 image natural coordinates) */}
               <svg
                 viewBox={livePreview.viewBox}
                 className="pointer-events-none absolute inset-0 h-full w-full"
               >
-                {/* Ground Line */}
                 <line
                   x1={0}
                   y1={anchorsUv.groundLineV * imageDims.heightPx}
@@ -511,7 +493,6 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   strokeWidth="2.5"
                   strokeDasharray="10 6"
                 />
-                {/* Axle-to-Axle Baseline */}
                 <line
                   x1={anchorsUv.rearAxle.u * imageDims.widthPx}
                   y1={anchorsUv.rearAxle.v * imageDims.heightPx}
@@ -521,8 +502,6 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   strokeWidth="2"
                   strokeDasharray="6 4"
                 />
-
-                {/* Live 170cm Rider Silhouette Preview */}
                 {showRiderOverlay && livePreview.overlayJointsSvg && (
                   <g opacity="0.88">
                     <RiderFigureSvg
@@ -533,16 +512,13 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                 )}
               </svg>
 
-              {/* Draggable UV Anchor Handles */}
               {CALIBRATION_ANCHOR_STEPS.map((step) => {
                 if (step.key === 'groundLineV') {
                   return (
                     <div
                       key={step.key}
                       onPointerDown={(e) => handleAnchorHandlePointerDown(e, step.key)}
-                      style={{
-                        top: `${anchorsUv.groundLineV * 100}%`,
-                      }}
+                      style={{ top: `${anchorsUv.groundLineV * 100}%` }}
                       className="absolute left-2 -translate-y-1/2 cursor-ns-resize rounded-sm border border-safe bg-surface/95 px-2 py-0.5 font-mono text-[10px] font-bold text-safe shadow-sm"
                     >
                       GROUND V={anchorsUv.groundLineV.toFixed(3)}
@@ -557,7 +533,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                     key={step.key}
                     type="button"
                     onPointerDown={(e) => handleAnchorHandlePointerDown(e, step.key)}
-                    title={step.label}
+                    title={t(step.labelKey)}
                     style={{
                       left: `${pt.u * 100}%`,
                       top: `${pt.v * 100}%`,
@@ -580,11 +556,10 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
             </div>
           </div>
 
-          {/* Right 4 cols: 6 Anchor Coordinates & Real-Time Metrics */}
           <div className="space-y-4 xl:col-span-4">
-            <div className="rounded-sm border border-line bg-surface p-4 space-y-2.5">
+            <div className="space-y-2.5 rounded-sm border border-line bg-surface p-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-ink">
-                6 Điểm neo UV [0..1]
+                {t('calibration.anchorsTitle')}
               </h4>
               <div className="space-y-1.5">
                 {CALIBRATION_ANCHOR_STEPS.map((step, idx) => {
@@ -605,7 +580,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                           : 'border-line bg-canvas text-ink-secondary hover:border-line-strong'
                       }`}
                     >
-                      <span className="font-medium">{step.label}</span>
+                      <span className="font-medium">{t(step.labelKey)}</span>
                       <span className="font-mono text-[11px] font-semibold tabular-telemetry">
                         {displayVal}
                       </span>
@@ -615,15 +590,14 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
               </div>
             </div>
 
-            {/* Real-Time Metrics from @dirtfit/ergonomics-engine */}
-            <div className="rounded-sm border border-line bg-surface p-4 space-y-3">
+            <div className="space-y-3 rounded-sm border border-line bg-surface p-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-ink">
-                Kiểm tra Tỷ lệ & Độ méo Phối cảnh
+                {t('calibration.metricsTitle')}
               </h4>
 
               {!livePreview.isValid ? (
-                <div className="rounded-sm border border-danger-border bg-danger-soft p-3 text-xs text-danger space-y-1">
-                  <p className="font-semibold">Tọa độ neo chưa hợp lệ:</p>
+                <div className="space-y-1 rounded-sm border border-danger-border bg-danger-soft p-3 text-xs text-danger">
+                  <p className="font-semibold">{t('calibration.invalidAnchors')}</p>
                   {livePreview.validationErrors.map((msg) => (
                     <p key={msg} className="font-mono text-[11px]">
                       • {msg}
@@ -641,18 +615,18 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                     <span className="text-ink">{livePreview.metrics.axleSpanPx} px</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-ink-muted">Góc nghiêng Roll:</span>
+                    <span className="text-ink-muted">Roll:</span>
                     <span className="text-ink">{livePreview.metrics.rollCorrectionDeg}&deg;</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-ink-muted">Seat Height đo được:</span>
+                    <span className="text-ink-muted">Measured Seat:</span>
                     <span className="text-ink">
                       {livePreview.metrics.measuredSeatHeightMm} mm (Spec:{' '}
                       {bike.geometrySpec?.unladenSeatHeightMm} mm)
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-t border-line pt-2">
-                    <span className="text-ink-muted">Sai số phối cảnh:</span>
+                    <span className="text-ink-muted">Perspective Error:</span>
                     <span
                       className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 font-bold ${
                         livePreview.metrics.isPerspectiveDistorted
@@ -670,18 +644,15 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                   </div>
                   {livePreview.fitResult && (
                     <div className="border-t border-line pt-2 text-[11px] text-ink-secondary">
-                      Preview Rider 170cm / 65kg:{' '}
-                      <strong className="text-ink">
-                        {livePreview.fitResult.footContact.contactStatus}
-                      </strong>{' '}
-                      (Score {livePreview.fitResult.fitScore}/100)
+                      {t('calibration.riderPreviewSummary', {
+                        status: livePreview.fitResult.footContact.contactStatus,
+                        score: livePreview.fitResult.fitScore,
+                      })}
                     </div>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-ink-muted">
-                  Chưa có thông số hình học (`BikeGeometrySpec`) để tính `pxPerMm`.
-                </p>
+                <p className="text-xs text-ink-muted">{t('calibration.noGeometrySpec')}</p>
               )}
 
               {calError && (
@@ -702,7 +673,9 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
                 className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-ink px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-surface transition-colors hover:bg-signal disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Save className="h-4 w-4" />
-                {savingCal ? 'Đang lưu Calibration...' : 'Lưu Calibration UV (PATCH)'}
+                {savingCal
+                  ? t('calibration.savingCalibration')
+                  : t('calibration.saveCalibrationBtn')}
               </button>
             </div>
           </div>

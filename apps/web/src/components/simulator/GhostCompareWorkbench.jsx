@@ -7,6 +7,7 @@ import TechnicalSlider from '@/components/ui/TechnicalSlider';
 import { formatMm, formatSignedDelta, formatVnd, getFitStatusMeta } from '@/lib/formatters';
 import { buildGhostCompareScene } from '@/lib/simulator-helpers';
 import { useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Side-by-side Ghost Overlay comparison workbench scaling two motorcycles accurately in mm.
@@ -18,6 +19,7 @@ import { useRiderProfile } from '@/providers/AppProviders';
  */
 export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlugB }) {
   const { riderProfile, setRiderProfile } = useRiderProfile();
+  const { locale, t } = useI18n();
 
   const defaultA = bikes.find((b) => b.slug === initialSlugA)?.id ?? bikes[0]?.id ?? '';
   const defaultB =
@@ -49,14 +51,14 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
   if (!scene) {
     return (
       <div className="border border-line bg-surface p-8 text-center text-sm text-ink-secondary">
-        Cần ít nhất 2 mẫu xe hoạt động để thực hiện so sánh Ghost Overlay.
+        {t('compare.sameBikeWarning')}
       </div>
     );
   }
 
   const { comparison, bikeASvg, bikeBSvg, viewport } = scene;
-  const fitA = getFitStatusMeta(comparison.bikeA.evaluation.footContact.contactStatus);
-  const fitB = getFitStatusMeta(comparison.bikeB.evaluation.footContact.contactStatus);
+  const fitA = getFitStatusMeta(comparison.bikeA.evaluation.footContact.contactStatus, locale);
+  const fitB = getFitStatusMeta(comparison.bikeB.evaluation.footContact.contactStatus, locale);
 
   return (
     <div className="space-y-6">
@@ -64,7 +66,7 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
       <div className="grid gap-4 border border-line bg-surface p-4 sm:grid-cols-4 sm:p-5">
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-            Xe A (Carbon Ink)
+            {t('compare.bikeALabel')}
           </label>
           <select
             value={bikeA.id}
@@ -81,7 +83,7 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
 
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-ghost">
-            Xe B (Ghost Cyan)
+            {t('compare.bikeBLabel')}
           </label>
           <select
             value={bikeB.id}
@@ -98,7 +100,7 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
 
         <div>
           <span className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-            Điểm neo chồng hình
+            {t('compare.alignLabel')}
           </span>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5">
             <button
@@ -110,7 +112,7 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
                   : 'border-line bg-canvas text-ink-secondary'
               }`}
             >
-              Trục sau & Đất
+              {t('compare.alignRearAxle').split(' (')[0]}
             </button>
             <button
               type="button"
@@ -121,14 +123,14 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
                   : 'border-line bg-canvas text-ink-secondary'
               }`}
             >
-              Hõm yên (Seat)
+              {t('compare.alignSeatPocket').split(' (')[0]}
             </button>
           </div>
         </div>
 
         <div className="flex flex-col justify-center">
           <TechnicalSlider
-            label="Độ mờ Ghost Xe B"
+            label="Ghost Opacity"
             value={ghostOpacity}
             min={20}
             max={100}
@@ -145,7 +147,7 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
             viewBox={`0 0 ${viewport.widthPx} ${viewport.heightPx}`}
             className="h-auto w-full"
             role="img"
-            aria-label={`Ghost Overlay so sánh ${bikeA.name} và ${bikeB.name}`}
+            aria-label={`Ghost Overlay ${bikeA.name} vs ${bikeB.name}`}
           >
             <line
               x1="20"
@@ -167,10 +169,10 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
 
         <div className="space-y-5 p-5 lg:col-span-4">
           <div className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-            Thể trạng người lái chung
+            {t('simulator.riderControlTitle')}
           </div>
           <TechnicalSlider
-            label="Chiều cao"
+            label={t('simulator.heightSlider')}
             value={riderProfile.heightCm}
             min={145}
             max={205}
@@ -178,7 +180,7 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
             onChange={(heightCm) => setRiderProfile({ heightCm })}
           />
           <TechnicalSlider
-            label="Cân nặng"
+            label={t('simulator.weightSlider')}
             value={riderProfile.weightKg}
             min={45}
             max={135}
@@ -208,15 +210,17 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-canvas text-xs uppercase tracking-wider text-ink-muted">
             <tr>
-              <th className="px-4 py-3">Thông số hình học & Vận hành</th>
+              <th className="px-4 py-3">{t('compare.fitSummaryTitle')}</th>
               <th className="px-4 py-3 text-ink">{bikeA.name}</th>
               <th className="px-4 py-3 text-ghost">{bikeB.name}</th>
-              <th className="px-4 py-3">Chênh lệch (B so với A)</th>
+              <th className="px-4 py-3">Δ (B − A)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line tabular-telemetry">
             <tr>
-              <td className="px-4 py-3 font-sans text-ink-secondary">Yên tĩnh (Unladen)</td>
+              <td className="px-4 py-3 font-sans text-ink-secondary">
+                {t('bikeDetail.specRows.unladenSeatHeightMm')}
+              </td>
               <td className="px-4 py-3">{formatMm(bikeA.geometrySpec.unladenSeatHeightMm)}</td>
               <td className="px-4 py-3">{formatMm(bikeB.geometrySpec.unladenSeatHeightMm)}</td>
               <td className="px-4 py-3 font-semibold">
@@ -224,7 +228,9 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
               </td>
             </tr>
             <tr>
-              <td className="px-4 py-3 font-sans text-ink-secondary">Yên thực tế khi ngồi (Sag)</td>
+              <td className="px-4 py-3 font-sans text-ink-secondary">
+                {t('simulator.effectiveSeatLabel')}
+              </td>
               <td className="px-4 py-3">
                 {formatMm(comparison.bikeA.evaluation.sag.effectiveSeatHeightMm)}
               </td>
@@ -236,7 +242,9 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
               </td>
             </tr>
             <tr>
-              <td className="px-4 py-3 font-sans text-ink-secondary">Độ rộng yên (Seat Width)</td>
+              <td className="px-4 py-3 font-sans text-ink-secondary">
+                {t('bikeDetail.specRows.seatWidthMm')}
+              </td>
               <td className="px-4 py-3">
                 {formatMm(comparison.bikeA.evaluation.footContact.effectiveSeatWidthMm)}
               </td>
@@ -248,7 +256,9 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
               </td>
             </tr>
             <tr>
-              <td className="px-4 py-3 font-sans text-ink-secondary">Trọng lượng ướt</td>
+              <td className="px-4 py-3 font-sans text-ink-secondary">
+                {t('bikeDetail.specRows.wetWeightKg')}
+              </td>
               <td className="px-4 py-3">{bikeA.geometrySpec.wetWeightKg} kg</td>
               <td className="px-4 py-3">{bikeB.geometrySpec.wetWeightKg} kg</td>
               <td className="px-4 py-3 font-semibold">
@@ -256,25 +266,27 @@ export default function GhostCompareWorkbench({ bikes, initialSlugA, initialSlug
               </td>
             </tr>
             <tr>
-              <td className="px-4 py-3 font-sans text-ink-secondary">Góc gối ngồi chạy</td>
-              <td className="px-4 py-3">
-                {comparison.bikeA.evaluation.kinematics.seated.kneeAngleDeg}°
+              <td className="px-4 py-3 font-sans text-ink-secondary">
+                {t('simulator.kneeAngleLabel')}
               </td>
               <td className="px-4 py-3">
-                {comparison.bikeB.evaluation.kinematics.seated.kneeAngleDeg}°
+                {comparison.bikeA.evaluation.kinematics.seated.kneeAngleDeg}&deg;
+              </td>
+              <td className="px-4 py-3">
+                {comparison.bikeB.evaluation.kinematics.seated.kneeAngleDeg}&deg;
               </td>
               <td className="px-4 py-3 font-semibold">
                 {formatSignedDelta(comparison.deltas.seatedKneeAngleDeltaDeg, '°')}
               </td>
             </tr>
             <tr>
-              <td className="px-4 py-3 font-sans text-ink-secondary">Giá bán niêm yết</td>
-              <td className="px-4 py-3">{formatVnd(bikeA.priceVnd)}</td>
-              <td className="px-4 py-3">{formatVnd(bikeB.priceVnd)}</td>
+              <td className="px-4 py-3 font-sans text-ink-secondary">{t('common.price')}</td>
+              <td className="px-4 py-3">{formatVnd(bikeA.priceVnd, locale)}</td>
+              <td className="px-4 py-3">{formatVnd(bikeB.priceVnd, locale)}</td>
               <td className="px-4 py-3 font-semibold">
                 {formatSignedDelta(
                   Math.round((bikeB.priceVnd - bikeA.priceVnd) / 1_000_000),
-                  'tr ₫'
+                  'M VND'
                 )}
               </td>
             </tr>

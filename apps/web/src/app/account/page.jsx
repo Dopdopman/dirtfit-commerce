@@ -5,8 +5,15 @@ import Link from 'next/link';
 import * as Tabs from '@radix-ui/react-tabs';
 import { LogOut, Plus, Trash2 } from 'lucide-react';
 import { apiRequest } from '@/lib/api-client';
-import { formatVnd, getOrderStatusMeta } from '@/lib/formatters';
+import {
+  formatVnd,
+  getFootwearLabel,
+  getOrderStatusMeta,
+  getShowroomMeta,
+  getTestRideStatusMeta,
+} from '@/lib/formatters';
 import { useAuth, useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Customer Account Hub: Body Profiles CRUD, Order Tracking & Cancellation, Test Ride Bookings.
@@ -15,11 +22,12 @@ import { useAuth, useRiderProfile } from '@/providers/AppProviders';
 export default function AccountPage() {
   const { user, authReady, logout, refreshUser } = useAuth();
   const { setRiderProfile } = useRiderProfile();
+  const { locale, t } = useI18n();
 
   const [profiles, setProfiles] = useState([]);
   const [orders, setOrders] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [label, setLabel] = useState('Hồ sơ Trail cá nhân');
+  const [label, setLabel] = useState('Trail MX Setup');
   const [heightCm, setHeightCm] = useState(168);
   const [weightKg, setWeightKg] = useState(65);
   const [footwear, setFootwear] = useState('MX_BOOTS');
@@ -56,7 +64,7 @@ export default function AccountPage() {
     });
     await refreshUser();
     await loadAccountData();
-    setStatusMessage('Đã lưu hồ sơ thể trạng mới.');
+    setStatusMessage(t('common.save'));
   };
 
   const handleDeleteProfile = async (id) => {
@@ -67,7 +75,7 @@ export default function AccountPage() {
   const handleCancelOrder = async (orderId) => {
     await apiRequest(`/api/v1/orders/${orderId}/cancel`, {
       method: 'POST',
-      body: { reason: 'Khách hàng hủy từ trang Tài khoản' },
+      body: { reason: 'Customer cancelled from Account Hub' },
     });
     await loadAccountData();
   };
@@ -83,7 +91,7 @@ export default function AccountPage() {
   if (!authReady) {
     return (
       <div className="mx-auto max-w-[1360px] px-4 py-10 text-sm text-ink-secondary sm:px-6">
-        Đang tải thông tin tài khoản...
+        {t('common.loading')}
       </div>
     );
   }
@@ -92,15 +100,14 @@ export default function AccountPage() {
     return (
       <div className="mx-auto max-w-lg px-4 py-14 text-center sm:px-6">
         <div className="border border-line-strong bg-surface p-8">
-          <h1 className="font-display text-2xl font-bold text-ink">Chưa đăng nhập</h1>
-          <p className="mt-2 text-sm text-ink-secondary">
-            Đăng nhập để quản lý hồ sơ thể trạng, đơn đặt cọc và lịch lái thử.
-          </p>
+          <h1 className="font-display text-2xl font-bold text-ink">
+            {t('account.loginPromptTitle')}
+          </h1>
           <Link
             href="/login?next=/account"
             className="mt-5 inline-block rounded-sm bg-signal px-6 py-2.5 text-sm font-bold text-surface"
           >
-            Đăng nhập
+            {t('account.loginPromptBtn')}
           </Link>
         </div>
       </div>
@@ -112,7 +119,7 @@ export default function AccountPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
         <div>
           <div className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-            {user.role} · TÀI KHOẢN CÁ NHÂN
+            {user.role} · {t('account.kicker')}
           </div>
           <h1 className="mt-1 font-display text-3xl font-extrabold text-ink">{user.fullName}</h1>
           <p className="text-xs text-ink-secondary">{user.email}</p>
@@ -124,7 +131,7 @@ export default function AccountPage() {
           className="inline-flex items-center gap-2 rounded-sm border border-line-strong bg-surface px-4 py-2 text-xs font-semibold text-ink hover:bg-canvas"
         >
           <LogOut className="h-3.5 w-3.5" />
-          <span>Đăng xuất</span>
+          <span>{t('account.signOut')}</span>
         </button>
       </div>
 
@@ -134,26 +141,26 @@ export default function AccountPage() {
             value="profiles"
             className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
           >
-            Hồ sơ vóc dáng ({profiles.length})
+            {t('account.tabProfile')} ({profiles.length})
           </Tabs.Trigger>
           <Tabs.Trigger
             value="orders"
             className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
           >
-            Đơn hàng & Đặt cọc ({orders.length})
+            {t('account.tabOrders')} ({orders.length})
           </Tabs.Trigger>
           <Tabs.Trigger
             value="test-rides"
             className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
           >
-            Lịch lái thử ({bookings.length})
+            {t('account.tabTestRides')} ({bookings.length})
           </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="profiles" className="grid gap-8 p-6 lg:grid-cols-12">
           <div className="space-y-3 lg:col-span-7">
             {profiles.length === 0 ? (
-              <p className="text-sm text-ink-secondary">Chưa có hồ sơ thể trạng nào được lưu.</p>
+              <p className="text-sm text-ink-secondary">{t('account.noProfiles')}</p>
             ) : (
               profiles.map((p) => (
                 <div
@@ -165,13 +172,13 @@ export default function AccountPage() {
                       {p.label}{' '}
                       {p.isDefault && (
                         <span className="ml-2 rounded-sm bg-ink px-1.5 py-0.5 text-[10px] text-surface">
-                          MẶC ĐỊNH
+                          {t('common.defaultLabel')}
                         </span>
                       )}
                     </div>
                     <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
                       {p.heightCm} cm · {p.weightKg} kg · Inseam {p.inseamCm ?? '—'} cm ·{' '}
-                      {p.footwear}
+                      {getFootwearLabel(p.footwear, locale)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -184,15 +191,15 @@ export default function AccountPage() {
                           inseamCm: p.inseamCm ?? null,
                           footwear: p.footwear,
                         });
-                        setStatusMessage(`Đã áp dụng hồ sơ "${p.label}" vào Simulator.`);
+                        setStatusMessage(`${p.label} -> Simulator`);
                       }}
                       className="rounded-sm border border-line-strong bg-surface px-2.5 py-1 text-xs font-medium text-ink"
                     >
-                      Dùng cho Simulator
+                      {t('account.applyToSimBtn')}
                     </button>
                     <button
                       type="button"
-                      aria-label="Xóa hồ sơ"
+                      aria-label={t('account.deleteProfileBtn')}
                       onClick={() => handleDeleteProfile(p.id)}
                       className="p-1.5 text-ink-muted hover:text-fit-unsafe"
                     >
@@ -211,17 +218,17 @@ export default function AccountPage() {
             onSubmit={handleCreateProfile}
             className="space-y-3 border border-line bg-canvas p-5 lg:col-span-5"
           >
-            <div className="text-sm font-bold text-ink">Thêm hồ sơ thể trạng mới</div>
+            <div className="text-sm font-bold text-ink">{t('account.newProfileTitle')}</div>
             <input
               required
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="Tên hồ sơ"
+              placeholder={t('account.profileNameLabel')}
               className="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
             />
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-ink-muted">Chiều cao (cm)</label>
+                <label className="text-xs text-ink-muted">{t('account.heightCm')}</label>
                 <input
                   type="number"
                   min={135}
@@ -232,7 +239,7 @@ export default function AccountPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-ink-muted">Cân nặng (kg)</label>
+                <label className="text-xs text-ink-muted">{t('account.weightKg')}</label>
                 <input
                   type="number"
                   min={35}
@@ -248,26 +255,26 @@ export default function AccountPage() {
               onChange={(e) => setFootwear(e.target.value)}
               className="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
             >
-              <option value="MX_BOOTS">MX Boots</option>
-              <option value="ADV_BOOTS">ADV Boots</option>
-              <option value="SNEAKERS">Giày thường</option>
+              <option value="MX_BOOTS">{getFootwearLabel('MX_BOOTS', locale)}</option>
+              <option value="ADV_BOOTS">{getFootwearLabel('ADV_BOOTS', locale)}</option>
+              <option value="SNEAKERS">{getFootwearLabel('SNEAKERS', locale)}</option>
             </select>
             <button
               type="submit"
               className="flex w-full items-center justify-center gap-1.5 rounded-sm bg-ink px-4 py-2 text-xs font-bold text-surface hover:bg-signal"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Lưu hồ sơ</span>
+              <span>{t('account.saveProfileBtn')}</span>
             </button>
           </form>
         </Tabs.Content>
 
         <Tabs.Content value="orders" className="space-y-4 p-6">
           {orders.length === 0 ? (
-            <p className="text-sm text-ink-secondary">Bạn chưa có đơn hàng nào.</p>
+            <p className="text-sm text-ink-secondary">{t('account.noOrders')}</p>
           ) : (
             orders.map((order) => {
-              const st = getOrderStatusMeta(order.status);
+              const st = getOrderStatusMeta(order.status, locale);
               return (
                 <div
                   key={order.id}
@@ -285,8 +292,10 @@ export default function AccountPage() {
                       </span>
                     </div>
                     <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                      Tổng: {formatVnd(order.totalVnd)} · Đã trả: {formatVnd(order.paidAmountVnd)} ·
-                      Còn lại: {formatVnd(order.remainingBalanceVnd)}
+                      {t('checkout.totalOrderValue')}: {formatVnd(order.totalVnd, locale)} ·{' '}
+                      {t('checkout.payableNow')}: {formatVnd(order.paidAmountVnd, locale)} ·{' '}
+                      {t('checkout.remainingBalance')}:{' '}
+                      {formatVnd(order.remainingBalanceVnd, locale)}
                     </div>
                   </div>
 
@@ -296,7 +305,7 @@ export default function AccountPage() {
                       onClick={() => handleCancelOrder(order.id)}
                       className="rounded-sm border border-fit-unsafe/50 bg-surface px-3 py-1.5 text-xs font-semibold text-fit-unsafe hover:bg-red-50"
                     >
-                      Hủy đơn chờ thanh toán
+                      {t('account.cancelOrderBtn')}
                     </button>
                   )}
                 </div>
@@ -308,41 +317,45 @@ export default function AccountPage() {
         <Tabs.Content value="test-rides" className="space-y-4 p-6">
           {bookings.length === 0 ? (
             <div className="text-sm text-ink-secondary">
-              Chưa có lịch lái thử nào.{' '}
+              {t('account.noTestRides')}{' '}
               <Link href="/test-ride" className="font-bold text-signal underline">
-                Đặt lịch ngay
+                {t('nav.testRide')}
               </Link>
             </div>
           ) : (
-            bookings.map((b) => (
-              <div
-                key={b.id}
-                className="flex flex-wrap items-center justify-between gap-4 border border-line bg-canvas p-4"
-              >
-                <div>
-                  <div className="font-bold text-ink">
-                    {b.bike?.name} ·{' '}
-                    <span className="text-xs font-normal text-ink-muted tabular-telemetry">
-                      {b.bookingCode}
-                    </span>
+            bookings.map((b) => {
+              const rideStatus = getTestRideStatusMeta(b.status, locale);
+              return (
+                <div
+                  key={b.id}
+                  className="flex flex-wrap items-center justify-between gap-4 border border-line bg-canvas p-4"
+                >
+                  <div>
+                    <div className="font-bold text-ink">
+                      {b.bike?.name} ·{' '}
+                      <span className="text-xs font-normal text-ink-muted tabular-telemetry">
+                        {b.bookingCode}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
+                      {b.scheduledDate} ({b.timeSlot}) ·{' '}
+                      {getShowroomMeta(b.showroomCode, locale).shortName} ·{' '}
+                      <strong>{rideStatus.label}</strong>
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                    {b.scheduledDate} ({b.timeSlot}) · Showroom {b.showroomCode} · Trạng thái:{' '}
-                    <strong>{b.status}</strong>
-                  </div>
-                </div>
 
-                {(b.status === 'PENDING' || b.status === 'CONFIRMED') && (
-                  <button
-                    type="button"
-                    onClick={() => handleCancelBooking(b.id)}
-                    className="rounded-sm border border-fit-unsafe/50 bg-surface px-3 py-1.5 text-xs font-semibold text-fit-unsafe hover:bg-red-50"
-                  >
-                    Hủy lịch
-                  </button>
-                )}
-              </div>
-            ))
+                  {(b.status === 'PENDING' || b.status === 'CONFIRMED') && (
+                    <button
+                      type="button"
+                      onClick={() => handleCancelBooking(b.id)}
+                      className="rounded-sm border border-fit-unsafe/50 bg-surface px-3 py-1.5 text-xs font-semibold text-fit-unsafe hover:bg-red-50"
+                    >
+                      {t('account.cancelRideBtn')}
+                    </button>
+                  )}
+                </div>
+              );
+            })
           )}
         </Tabs.Content>
       </Tabs.Root>

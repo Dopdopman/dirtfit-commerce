@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
+  <rect width="180" height="180" rx="22" fill="#111111" />
+  <rect x="26" y="42" width="22" height="12" fill="#E84C1E" />
+  <rect x="26" y="84" width="32" height="12" fill="#E84C1E" />
+  <rect x="26" y="126" width="22" height="12" fill="#E84C1E" />
+  <path
+    d="M70 40H112L144 68V112L112 140H70V40Z"
+    stroke="#FFFFFF"
+    strokeWidth="15"
+    strokeLinejoin="miter"
+  />
+  <line x1="98" y1="26" x2="136" y2="154" stroke="#E84C1E" strokeWidth="14" />
+  <circle cx="136" cy="154" r="9" fill="#FFFFFF" />
+</svg>

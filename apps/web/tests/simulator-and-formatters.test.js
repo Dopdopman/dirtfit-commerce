@@ -114,8 +114,9 @@ describe('@dirtfit/web 2D Simulator, Ghost Overlay, Formatters & Single-Flight R
   });
 
   it('formats VND currency, millimeter values, signed deltas, and Rider Fit badges', () => {
-    expect(formatVnd(359_000_000)).toContain('359.000.000');
-    expect(formatVnd(359_000_000)).toContain('₫');
+    expect(formatVnd(359_000_000)).toBe('359,000,000 VND');
+    expect(formatVnd(359_000_000, 'vi')).toContain('359.000.000');
+    expect(formatVnd(359_000_000, 'vi')).toContain('₫');
     expect(formatMm(963)).toBe('963 mm');
     expect(formatMm(null)).toBe('—');
     expect(formatSignedDelta(-55, 'mm')).toBe('-55 mm');

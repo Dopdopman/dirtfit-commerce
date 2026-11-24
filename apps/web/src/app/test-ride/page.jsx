@@ -6,7 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import { Calendar, CheckCircle2 } from 'lucide-react';
 import { SHOWROOMS, TEST_RIDE_TIME_SLOTS } from '@dirtfit/shared/enums';
 import { apiRequest } from '@/lib/api-client';
+import { getFootwearLabel, getShowroomMeta } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth, useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Inner Test Ride Booking form consuming query parameters cleanly inside Suspense.
@@ -16,6 +19,7 @@ function TestRideContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { riderProfile } = useRiderProfile();
+  const { locale, t } = useI18n();
 
   const [bikes, setBikes] = useState([]);
   const [bikeId, setBikeId] = useState(searchParams.get('bikeId') ?? '');
@@ -74,7 +78,7 @@ function TestRideContent() {
     e.preventDefault();
     setErrorMsg('');
     if (!user) {
-      setErrorMsg('Vui lòng đăng nhập trước khi xác nhận lịch lái thử.');
+      setErrorMsg(t('testRide.authHintTitle'));
       return;
     }
 
@@ -95,7 +99,7 @@ function TestRideContent() {
       setBooked(res.booking);
       await loadSlots();
     } catch (err) {
-      setErrorMsg(err?.detail || 'Không thể đặt lịch lái thử cho khung giờ này.');
+      setErrorMsg(localizeApiError(err, locale));
     } finally {
       setSubmitting(false);
     }
@@ -105,17 +109,18 @@ function TestRideContent() {
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <div className="mb-6 border-b border-line pb-4">
         <div className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-          HỆ THỐNG 3 SHOWROOM LÁI THỬ THỰC TẾ
+          {t('testRide.kicker')}
         </div>
         <h1 className="mt-1 font-display text-3xl font-extrabold text-ink">
-          Đặt lịch lái thử xe địa hình
+          {t('testRide.title')}
         </h1>
-        <p className="mt-2 text-sm text-ink-secondary">
-          Hệ thống tự động đính kèm thông số vóc dáng hiện tại của bạn (
-          <span className="tabular-telemetry">
-            {riderProfile.heightCm}cm / {riderProfile.weightKg}kg
-          </span>
-          ) để kỹ thuật viên chuẩn bị sẵn Rider Sag & yên thấp phù hợp.
+        <p className="mt-2 text-sm text-ink-secondary">{t('testRide.subtitle')}</p>
+        <p className="mt-2 rounded-sm border border-line bg-surface px-3 py-1.5 text-xs text-ink-secondary tabular-telemetry">
+          {t('testRide.attachedFitBanner', {
+            height: riderProfile.heightCm,
+            weight: riderProfile.weightKg,
+            footwear: getFootwearLabel(riderProfile.footwear, locale),
+          })}
         </p>
       </div>
 
@@ -123,11 +128,16 @@ function TestRideContent() {
         <div className="mb-6 border border-fit-flat/40 bg-emerald-50 p-5">
           <div className="flex items-center gap-2 font-bold text-fit-flat">
             <CheckCircle2 className="h-5 w-5" />
-            <span>Đã đặt lịch lái thử thành công: {booked.bookingCode}</span>
+            <span>
+              {t('testRide.successTitle')}: {booked.bookingCode}
+            </span>
           </div>
           <p className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-            {booked.bike?.name} · {booked.scheduledDate} ({booked.timeSlot}) tại{' '}
-            {booked.showroomCode}
+            {t('testRide.successBody', {
+              showroom: getShowroomMeta(booked.showroomCode, locale).name,
+              slot: booked.timeSlot,
+              date: booked.scheduledDate,
+            })}
           </p>
         </div>
       )}
@@ -136,7 +146,7 @@ function TestRideContent() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-ink-muted">
-              Mẫu xe lái thử
+              {t('testRide.bikeLabel')}
             </label>
             <select
               value={bikeId}
@@ -153,7 +163,7 @@ function TestRideContent() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-ink-muted">
-              Showroom
+              {t('testRide.showroomLabel')}
             </label>
             <select
               value={showroomCode}
@@ -162,7 +172,7 @@ function TestRideContent() {
             >
               {SHOWROOMS.map((s) => (
                 <option key={s.code} value={s.code}>
-                  {s.name}
+                  {getShowroomMeta(s.code, locale).name}
                 </option>
               ))}
             </select>
@@ -170,7 +180,7 @@ function TestRideContent() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-ink-muted">
-              Ngày lái thử
+              {t('testRide.dateLabel')}
             </label>
             <input
               type="date"
@@ -183,22 +193,22 @@ function TestRideContent() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-ink-muted">
-              Hạng bằng lái
+              {t('testRide.licenseLabel')}
             </label>
             <select
               value={licenseClass}
               onChange={(e) => setLicenseClass(e.target.value)}
               className="mt-1.5 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm"
             >
-              <option value="A2">Bằng A2 (trên 175cc)</option>
-              <option value="A1">Bằng A1 (dưới 175cc)</option>
+              <option value="A2">{t('testRide.licenseOptions.A2')}</option>
+              <option value="A1">{t('testRide.licenseOptions.A1')}</option>
             </select>
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-ink-muted">
-            Khung giờ trống tại showroom
+            {t('testRide.slotLabel')}
           </label>
           <div className="mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {slots.map((slot) => (
@@ -223,13 +233,12 @@ function TestRideContent() {
 
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-ink-muted">
-            Yêu cầu chuẩn bị xe (tùy chọn)
+            {t('testRide.notesLabel')}
           </label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Ví dụ: Gắn sẵn yên thấp để thử chống chân..."
             className="mt-1.5 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm"
           />
         </div>
@@ -239,7 +248,7 @@ function TestRideContent() {
             {errorMsg}{' '}
             {!user && (
               <Link href="/login?next=/test-ride" className="font-bold underline">
-                Đăng nhập tại đây
+                {t('testRide.authHintBtn')}
               </Link>
             )}
           </div>
@@ -251,7 +260,7 @@ function TestRideContent() {
           className="inline-flex items-center gap-2 rounded-sm bg-signal px-6 py-3 text-sm font-bold text-surface hover:bg-signal-hover disabled:opacity-50"
         >
           <Calendar className="h-4 w-4" />
-          <span>{submitting ? 'Đang giữ khung giờ...' : 'Xác nhận lịch lái thử'}</span>
+          <span>{submitting ? t('testRide.submitting') : t('testRide.submitBtn')}</span>
         </button>
       </form>
     </div>
@@ -267,7 +276,7 @@ export default function TestRidePage() {
     <Suspense
       fallback={
         <div className="mx-auto max-w-4xl px-4 py-10 text-sm text-ink-secondary sm:px-6">
-          Đang tải khung giờ showroom...
+          Loading...
         </div>
       }
     >

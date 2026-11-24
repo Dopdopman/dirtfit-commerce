@@ -6,9 +6,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Edit3, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { BIKE_CATEGORIES, PRODUCT_STATUSES, RIDING_FOCUSES, USER_ROLES } from '@dirtfit/shared';
 import { canAccessAdminOnlyFeature } from '@/lib/admin-helpers';
-import { ApiError, apiRequest } from '@/lib/api-client';
+import { apiRequest } from '@/lib/api-client';
 import { formatVnd, getCategoryLabel } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 const INITIAL_NEW_BIKE = {
   brandId: '',
@@ -17,7 +19,7 @@ const INITIAL_NEW_BIKE = {
   slug: '',
   modelYear: 2026,
   category: 'ENDURO',
-  ridingFocus: 'OFF_ROAD_ENDURO',
+  ridingFocus: 'OFF_ROAD',
   engineCc: 350,
   streetLegal: true,
   priceVnd: 280000000,
@@ -53,6 +55,7 @@ const INITIAL_NEW_BIKE = {
  */
 export default function AdminBikesPage() {
   const { user } = useAuth();
+  const { locale, t } = useI18n();
   const isAdmin = canAccessAdminOnlyFeature(user?.role);
 
   const [bikes, setBikes] = useState([]);
@@ -85,11 +88,11 @@ export default function AdminBikesPage() {
         setForm((prev) => ({ ...prev, brandId: brandItems[0].id }));
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể tải danh sách xe.');
+      setError(localizeApiError(err, locale));
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, form.brandId]);
+  }, [search, statusFilter, form.brandId, locale]);
 
   useEffect(() => {
     loadBikes();
@@ -146,10 +149,10 @@ export default function AdminBikesPage() {
       });
       setModalOpen(false);
       setForm((prev) => ({ ...INITIAL_NEW_BIKE, brandId: prev.brandId }));
-      setFeedback(`Đã tạo mẫu xe mới "${payload.name}".`);
+      setFeedback(t('adminBikes.createdToast', { name: payload.name }));
       await loadBikes();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Tạo xe mới thất bại.');
+      setError(localizeApiError(err, locale));
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +160,7 @@ export default function AdminBikesPage() {
 
   const handleSoftDelete = async (bike) => {
     if (!isAdmin) return;
-    if (!window.confirm(`Xác nhận xóa mềm (soft-delete) mẫu xe "${bike.name}"?`)) {
+    if (!window.confirm(t('adminBikes.confirmDelete', { name: bike.name }))) {
       return;
     }
     setError('');
@@ -166,10 +169,10 @@ export default function AdminBikesPage() {
       await apiRequest(`/api/v1/admin/bikes/${bike.id}`, {
         method: 'DELETE',
       });
-      setFeedback(`Đã ẩn / soft-delete "${bike.name}".`);
+      setFeedback(t('adminBikes.deletedToast', { name: bike.name }));
       await loadBikes();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể xóa mềm mẫu xe.');
+      setError(localizeApiError(err, locale));
     }
   };
 
@@ -177,13 +180,11 @@ export default function AdminBikesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">
-            Quản lý Xe, Thông số & Blueprint 2D
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">{t('adminBikes.title')}</h1>
           <p className="mt-1 text-sm text-ink-secondary">
             {user?.role === USER_ROLES.SALES_STAFF
-              ? 'SALES_STAFF có quyền cập nhật tồn kho / trạng thái kinh doanh.'
-              : 'ADMIN có toàn quyền CRUD xe, thông số hình học, Blueprint Calibration & phụ kiện tương thích.'}
+              ? t('adminBikes.subtitleSales')
+              : t('adminBikes.subtitleAdmin')}
           </p>
         </div>
 
@@ -194,7 +195,7 @@ export default function AdminBikesPage() {
             className="inline-flex items-center gap-1.5 rounded-sm border border-line-strong bg-surface px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Tải lại
+            {t('common.reload')}
           </button>
           {isAdmin && (
             <button
@@ -203,7 +204,7 @@ export default function AdminBikesPage() {
               className="inline-flex items-center gap-1.5 rounded-sm bg-ink px-3.5 py-2 text-xs font-semibold text-surface hover:bg-signal"
             >
               <Plus className="h-4 w-4" />
-              Thêm mẫu xe mới
+              {t('adminBikes.addBikeBtn')}
             </button>
           )}
         </div>
@@ -215,7 +216,7 @@ export default function AdminBikesPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo tên xe, SKU hoặc slug..."
+          placeholder={t('adminBikes.searchPlaceholder')}
           className="rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
         />
         <select
@@ -223,7 +224,7 @@ export default function AdminBikesPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
         >
-          <option value="">Tất cả trạng thái</option>
+          <option value="">{t('adminBikes.allStatuses')}</option>
           {Object.values(PRODUCT_STATUSES).map((st) => (
             <option key={st} value={st}>
               {st}
@@ -238,7 +239,7 @@ export default function AdminBikesPage() {
           }}
           className="rounded-sm border border-line-strong bg-canvas px-3 py-2 text-xs font-semibold text-ink hover:bg-surface"
         >
-          Xóa bộ lọc
+          {t('common.clearFilters')}
         </button>
       </div>
 
@@ -258,20 +259,20 @@ export default function AdminBikesPage() {
         <table className="w-full text-left text-xs">
           <thead className="border-b border-line bg-canvas text-[11px] uppercase tracking-wider text-ink-muted">
             <tr>
-              <th className="px-4 py-3">SKU / Mẫu xe</th>
-              <th className="px-4 py-3">Phân khúc</th>
-              <th className="px-4 py-3 text-right">Giá niêm yết</th>
-              <th className="px-4 py-3 text-right">Yên (mm)</th>
-              <th className="px-4 py-3 text-right">Kho / Giữ / Khả dụng</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3 text-right">Thao tác</th>
+              <th className="px-4 py-3">{t('adminBikes.colSkuModel')}</th>
+              <th className="px-4 py-3">{t('adminBikes.colSegment')}</th>
+              <th className="px-4 py-3 text-right">{t('adminBikes.colPrice')}</th>
+              <th className="px-4 py-3 text-right">{t('adminBikes.colSeat')}</th>
+              <th className="px-4 py-3 text-right">{t('adminBikes.colInventory')}</th>
+              <th className="px-4 py-3">{t('adminBikes.colStatus')}</th>
+              <th className="px-4 py-3 text-right">{t('adminBikes.colActions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {bikes.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-ink-muted">
-                  {loading ? 'Đang tải danh sách xe...' : 'Không có xe phù hợp.'}
+                  {loading ? t('common.loading') : t('adminBikes.empty')}
                 </td>
               </tr>
             ) : (
@@ -284,10 +285,10 @@ export default function AdminBikesPage() {
                     </p>
                   </td>
                   <td className="px-4 py-3 text-ink-secondary">
-                    {getCategoryLabel(bike.category)}
+                    {getCategoryLabel(bike.category, locale)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-ink tabular-telemetry">
-                    {formatVnd(bike.priceVnd)}
+                    {formatVnd(bike.priceVnd, locale)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-ink-secondary tabular-telemetry">
                     {bike.geometrySpec?.unladenSeatHeightMm ?? '—'}
@@ -309,14 +310,14 @@ export default function AdminBikesPage() {
                         className="inline-flex items-center gap-1 rounded-sm border border-line-strong bg-canvas px-2.5 py-1 text-[11px] font-semibold text-ink hover:border-signal hover:text-signal"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
-                        Chi tiết &amp; Calibrate
+                        {t('adminBikes.detailCalibrateBtn')}
                       </Link>
                       {isAdmin && (
                         <button
                           type="button"
                           onClick={() => handleSoftDelete(bike)}
                           className="rounded-sm border border-danger-border bg-danger-soft p-1.5 text-danger hover:opacity-90"
-                          title="Xóa mềm"
+                          title={t('common.delete')}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -337,7 +338,7 @@ export default function AdminBikesPage() {
           <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[95vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-sm border border-line bg-surface p-6 shadow-xl">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <Dialog.Title className="text-lg font-bold text-ink">
-                Tạo mẫu xe mới &amp; Geometry Spec
+                {t('adminBikes.modalTitle')}
               </Dialog.Title>
               <Dialog.Close asChild>
                 <button type="button" className="rounded-sm border border-line p-1.5 text-ink">
@@ -349,7 +350,9 @@ export default function AdminBikesPage() {
             <form onSubmit={handleCreateBike} className="mt-4 space-y-4 text-xs">
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Hãng xe</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.brand')}
+                  </span>
                   <select
                     required
                     value={form.brandId}
@@ -365,7 +368,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">SKU</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.sku')}
+                  </span>
                   <input
                     required
                     value={form.sku}
@@ -376,7 +381,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Tên mẫu xe</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.name')}
+                  </span>
                   <input
                     required
                     value={form.name}
@@ -387,7 +394,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Slug URL</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.slug')}
+                  </span>
                   <input
                     required
                     value={form.slug}
@@ -398,7 +407,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Danh mục</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.category')}
+                  </span>
                   <select
                     value={form.category}
                     onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
@@ -413,7 +424,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Riding Focus</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.ridingFocus')}
+                  </span>
                   <select
                     value={form.ridingFocus}
                     onChange={(e) => setForm((p) => ({ ...p, ridingFocus: e.target.value }))}
@@ -428,7 +441,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Giá bán (VND)</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.priceVnd')}
+                  </span>
                   <input
                     type="number"
                     required
@@ -439,7 +454,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Tiền đặt cọc (VND)</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.depositVnd')}
+                  </span>
                   <input
                     type="number"
                     required
@@ -450,7 +467,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Tồn kho ban đầu</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.stockQty')}
+                  </span>
                   <input
                     type="number"
                     required
@@ -462,7 +481,9 @@ export default function AdminBikesPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Chiều cao yên (mm)</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikes.fields.seatHeightMm')}
+                  </span>
                   <input
                     type="number"
                     required
@@ -487,7 +508,7 @@ export default function AdminBikesPage() {
                     type="button"
                     className="rounded-sm border border-line-strong px-4 py-2 font-semibold text-ink"
                   >
-                    Hủy
+                    {t('common.cancel')}
                   </button>
                 </Dialog.Close>
                 <button
@@ -495,7 +516,7 @@ export default function AdminBikesPage() {
                   disabled={submitting}
                   className="rounded-sm bg-ink px-4 py-2 font-semibold text-surface hover:bg-signal disabled:opacity-50"
                 >
-                  {submitting ? 'Đang tạo...' : 'Tạo xe mới'}
+                  {submitting ? t('adminBikes.creatingBtn') : t('adminBikes.createBtn')}
                 </button>
               </div>
             </form>

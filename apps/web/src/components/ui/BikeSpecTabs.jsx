@@ -2,6 +2,7 @@
 
 import * as Tabs from '@radix-ui/react-tabs';
 import { formatMm, formatVnd, getCategoryLabel, getRidingFocusLabel } from '@/lib/formatters';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Tier-3 Progressive Disclosure technical specification tabs powered by Radix Tabs.
@@ -12,6 +13,7 @@ import { formatMm, formatVnd, getCategoryLabel, getRidingFocusLabel } from '@/li
  * @returns {import('react').JSX.Element}
  */
 export default function BikeSpecTabs({ bike, onOpenDrawer, onAddAccessory }) {
+  const { locale, t } = useI18n();
   const g = bike.geometrySpec ?? {};
   const compatibilities = bike.compatibilities ?? [];
 
@@ -20,32 +22,26 @@ export default function BikeSpecTabs({ bike, onOpenDrawer, onAddAccessory }) {
       <Tabs.Root defaultValue="geometry">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 sm:px-6">
           <Tabs.List
-            aria-label="Chi tiết thông số kỹ thuật"
+            aria-label={t('bikeDetail.specSpecsTab')}
             className="flex flex-wrap gap-6 text-sm font-medium"
           >
             <Tabs.Trigger
               value="geometry"
               className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
             >
-              Hình học & Phuộc
+              {t('bikeDetail.specErgonomicsTab')}
             </Tabs.Trigger>
             <Tabs.Trigger
               value="engine"
               className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
             >
-              Động cơ & Khung sườn
+              {t('bikeDetail.specSpecsTab')}
             </Tabs.Trigger>
             <Tabs.Trigger
               value="parts"
               className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
             >
-              Phụ kiện tương thích ({compatibilities.length})
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="policy"
-              className="border-b-2 border-transparent py-3.5 text-ink-secondary data-[state=active]:border-signal data-[state=active]:text-ink"
-            >
-              Chính sách Đặt cọc
+              {t('bikeDetail.specModsTab', { count: compatibilities.length })}
             </Tabs.Trigger>
           </Tabs.List>
 
@@ -54,25 +50,32 @@ export default function BikeSpecTabs({ bike, onOpenDrawer, onAddAccessory }) {
             onClick={onOpenDrawer}
             className="my-2 rounded-sm border border-line-strong px-3 py-1.5 text-xs font-semibold text-ink hover:bg-canvas"
           >
-            Mở Spec Sheet đầy đủ
+            {t('bikeDetail.openDrawerBtn')}
           </button>
         </div>
 
         <Tabs.Content value="geometry" className="grid gap-6 p-6 sm:grid-cols-3">
           <div className="border border-line bg-canvas p-4">
-            <div className="text-xs text-ink-muted">Chiều cao yên tĩnh / Độ rộng</div>
+            <div className="text-xs text-ink-muted">
+              {t('bikeDetail.specRows.unladenSeatHeightMm')} /{' '}
+              {t('bikeDetail.specRows.seatWidthMm')}
+            </div>
             <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
               {formatMm(g.unladenSeatHeightMm)} / {formatMm(g.seatWidthMm)}
             </div>
           </div>
           <div className="border border-line bg-canvas p-4">
-            <div className="text-xs text-ink-muted">Hành trình phuộc trước / sau</div>
+            <div className="text-xs text-ink-muted">
+              {t('bikeDetail.specRows.frontTravelMm')} / {t('bikeDetail.specRows.rearTravelMm')}
+            </div>
             <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
               {formatMm(g.frontTravelMm)} / {formatMm(g.rearTravelMm)}
             </div>
           </div>
           <div className="border border-line bg-canvas p-4">
-            <div className="text-xs text-ink-muted">Wheelbase / Khoảng sáng gầm</div>
+            <div className="text-xs text-ink-muted">
+              {t('bikeDetail.specRows.wheelbaseMm')} / {t('bikeDetail.specRows.groundClearanceMm')}
+            </div>
             <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
               {formatMm(g.wheelbaseMm)} / {formatMm(g.groundClearanceMm)}
             </div>
@@ -81,37 +84,43 @@ export default function BikeSpecTabs({ bike, onOpenDrawer, onAddAccessory }) {
 
         <Tabs.Content value="engine" className="grid gap-6 p-6 sm:grid-cols-3">
           <div className="border border-line bg-canvas p-4">
-            <div className="text-xs text-ink-muted">Dung tích xi-lanh</div>
-            <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
-              {bike.engineCc} cc
+            <div className="text-xs text-ink-muted">
+              CC / {t('adminBikeDetail.fields.category')}
             </div>
-            <div className="mt-1 text-xs text-ink-secondary">{getCategoryLabel(bike.category)}</div>
+            <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
+              {bike.engineCc} {t('bikeDetail.ccUnit')}
+            </div>
+            <div className="mt-1 text-xs text-ink-secondary">
+              {getCategoryLabel(bike.category, locale)}
+            </div>
           </div>
           <div className="border border-line bg-canvas p-4">
-            <div className="text-xs text-ink-muted">Trọng lượng ướt & Bình xăng</div>
+            <div className="text-xs text-ink-muted">
+              {t('bikeDetail.specRows.wetWeightKg')} &amp; {t('bikeDetail.specRows.fuelCapacityL')}
+            </div>
             <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
               {g.wetWeightKg} kg · {g.fuelCapacityL ?? '—'} L
             </div>
             <div className="mt-1 text-xs text-ink-secondary">
-              {getRidingFocusLabel(bike.ridingFocus)}
+              {getRidingFocusLabel(bike.ridingFocus, locale)}
             </div>
           </div>
           <div className="border border-line bg-canvas p-4">
-            <div className="text-xs text-ink-muted">Tỉ số Sag chuẩn & Độ cứng yên</div>
+            <div className="text-xs text-ink-muted">
+              Target Rider Sag &amp; {t('bikeDetail.specRows.seatFoamFirmness')}
+            </div>
             <div className="mt-1 text-lg font-bold text-ink tabular-telemetry">
               {Math.round((g.targetRiderSagRatio ?? 0.33) * 100)}% · {g.seatFoamFirmness}
             </div>
             <div className="mt-1 text-xs text-ink-secondary">
-              Góc lái {g.rakeDeg ?? '—'}° · Trail {g.trailMm ?? '—'} mm
+              Rake {g.rakeDeg ?? '—'}&deg; · Trail {g.trailMm ?? '—'} mm
             </div>
           </div>
         </Tabs.Content>
 
         <Tabs.Content value="parts" className="p-6">
           {compatibilities.length === 0 ? (
-            <p className="text-sm text-ink-secondary">
-              Chưa có phụ kiện gắn trực tiếp cho mẫu này.
-            </p>
+            <p className="text-sm text-ink-secondary">{t('bikeDetail.noCompatibleMods')}</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {compatibilities.map((comp) => (
@@ -122,12 +131,14 @@ export default function BikeSpecTabs({ bike, onOpenDrawer, onAddAccessory }) {
                   <div>
                     <div className="font-semibold text-ink">{comp.accessory?.name}</div>
                     <div className="mt-1 text-xs text-ink-secondary">
-                      {comp.fitmentNotes || 'Tương thích chuẩn ngàm zin theo xe'}
+                      {comp.exactSeatDropMm
+                        ? t('bikeDetail.seatDropNote', { mm: comp.exactSeatDropMm })
+                        : comp.fitmentNotes || 'OEM Fitment'}
+                      {comp.requiresWorkshopInstall ? ` · ${t('bikeDetail.workshopInstall')}` : ''}
                     </div>
                     <div className="mt-1.5 text-xs font-medium text-ink tabular-telemetry">
-                      Giá: {formatVnd(comp.accessory?.priceVnd ?? 0)}
-                      {comp.installLaborVnd > 0 &&
-                        ` (+${formatVnd(comp.installLaborVnd)} công lắp)`}
+                      {formatVnd(comp.accessory?.priceVnd ?? 0, locale)}
+                      {comp.installLaborVnd > 0 && ` (+${formatVnd(comp.installLaborVnd, locale)})`}
                     </div>
                   </div>
                   <button
@@ -136,23 +147,14 @@ export default function BikeSpecTabs({ bike, onOpenDrawer, onAddAccessory }) {
                     onClick={() => onAddAccessory(comp.accessoryId)}
                     className="shrink-0 rounded-sm border border-line-strong bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-ink hover:text-surface disabled:opacity-40"
                   >
-                    {(comp.availableQty ?? 0) > 0 ? 'Thêm vào giỏ' : 'Tạm hết'}
+                    {(comp.availableQty ?? 0) > 0
+                      ? t('bikeDetail.addAccessoryBtn')
+                      : t('common.outOfStock')}
                   </button>
                 </div>
               ))}
             </div>
           )}
-        </Tabs.Content>
-
-        <Tabs.Content value="policy" className="space-y-2 p-6 text-sm text-ink-secondary">
-          <p>
-            • Đặt cọc giữ khung xe trực tuyến ({formatVnd(bike.depositAmountVnd)}) qua VietQR PayOS
-            giữ chỗ tồn kho độc quyền trong 15 phút khi thanh toán.
-          </p>
-          <p>
-            • Xe máy không áp dụng COD; phần chênh lệch còn lại thanh toán khi nhận xe tại 3
-            showroom Hà Nội, Đà Nẵng hoặc TP.HCM kèm dịch vụ cân chỉnh Rider Sag miễn phí.
-          </p>
         </Tabs.Content>
       </Tabs.Root>
     </section>

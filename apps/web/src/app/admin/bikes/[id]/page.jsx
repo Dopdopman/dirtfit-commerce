@@ -14,9 +14,11 @@ import {
 } from '@dirtfit/shared';
 import BlueprintCalibrationTool from '@/components/admin/BlueprintCalibrationTool';
 import { canAccessAdminOnlyFeature } from '@/lib/admin-helpers';
-import { ApiError, apiRequest } from '@/lib/api-client';
+import { apiRequest } from '@/lib/api-client';
 import { formatVnd } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Admin Bike Detail Workspace (`/admin/bikes/[id]`) with 4 Radix Tabs:
@@ -27,6 +29,7 @@ export default function AdminBikeDetailPage() {
   const params = useParams();
   const bikeId = typeof params?.id === 'string' ? params.id : '';
   const { user } = useAuth();
+  const { locale, t } = useI18n();
   const isAdmin = canAccessAdminOnlyFeature(user?.role);
 
   const [bike, setBike] = useState(null);
@@ -36,12 +39,11 @@ export default function AdminBikeDetailPage() {
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
 
-  // Tab 1 state
   const [generalForm, setGeneralForm] = useState({
     name: '',
     modelYear: 2026,
     category: 'ENDURO',
-    ridingFocus: 'OFF_ROAD_ENDURO',
+    ridingFocus: 'OFF_ROAD',
     engineCc: 350,
     streetLegal: true,
     priceVnd: 0,
@@ -52,10 +54,7 @@ export default function AdminBikeDetailPage() {
     descriptionMd: '',
   });
 
-  // Tab 2 state
   const [geoForm, setGeoForm] = useState(null);
-
-  // Tab 4 compatibility map keyed by accessoryId
   const [compatDrafts, setCompatDrafts] = useState({});
 
   const hydrateForms = (bikeData) => {
@@ -63,7 +62,7 @@ export default function AdminBikeDetailPage() {
       name: bikeData.name || '',
       modelYear: bikeData.modelYear || 2026,
       category: bikeData.category || 'ENDURO',
-      ridingFocus: bikeData.ridingFocus || 'OFF_ROAD_ENDURO',
+      ridingFocus: bikeData.ridingFocus || 'OFF_ROAD',
       engineCc: bikeData.engineCc || 250,
       streetLegal: Boolean(bikeData.streetLegal),
       priceVnd: bikeData.priceVnd ?? 0,
@@ -108,11 +107,11 @@ export default function AdminBikeDetailPage() {
         hydrateForms(loadedBike);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể tải thông tin xe.');
+      setError(localizeApiError(err, locale));
     } finally {
       setLoading(false);
     }
-  }, [bikeId]);
+  }, [bikeId, locale]);
 
   useEffect(() => {
     loadData();
@@ -151,12 +150,10 @@ export default function AdminBikeDetailPage() {
         method: 'PATCH',
         body,
       });
-      setFeedback('Đã lưu thông tin chung & tồn kho (version incremented).');
+      setFeedback(t('adminBikeDetail.generalSaved'));
       await loadData();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? `[${err.code}] ${err.detail || err.message}` : 'Lưu thất bại.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setSaving(false);
     }
@@ -203,11 +200,7 @@ export default function AdminBikeDetailPage() {
 
     if (!parsed.success) {
       setSaving(false);
-      setError(
-        `Sai định dạng thông số hình học: ${parsed.error.issues
-          .map((i) => `${i.path.join('.')}: ${i.message}`)
-          .join('; ')}`
-      );
+      setError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
       return;
     }
 
@@ -219,12 +212,10 @@ export default function AdminBikeDetailPage() {
           geometrySpec: parsed.data,
         },
       });
-      setFeedback('Đã lưu BikeGeometrySpec & làm mới cache Simulator!');
+      setFeedback(t('adminBikeDetail.geometrySaved'));
       await loadData();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? `[${err.code}] ${err.detail || err.message}` : 'Lưu thất bại.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setSaving(false);
     }
@@ -280,14 +271,10 @@ export default function AdminBikeDetailPage() {
         method: 'PUT',
         body: { compatibilities },
       });
-      setFeedback(`Đã lưu ma trận ${compatibilities.length} phụ kiện tương thích.`);
+      setFeedback(t('adminBikeDetail.compatSaved', { count: compatibilities.length }));
       await loadData();
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? `[${err.code}] ${err.detail || err.message}`
-          : 'Không thể lưu ma trận tương thích.'
-      );
+      setError(localizeApiError(err, locale));
     } finally {
       setSaving(false);
     }
@@ -296,7 +283,7 @@ export default function AdminBikeDetailPage() {
   if (loading && !bike) {
     return (
       <div className="rounded-sm border border-line bg-surface p-8 text-center text-sm text-ink-secondary">
-        Đang tải thông số chi tiết xe &amp; Blueprint...
+        {t('common.loading')}
       </div>
     );
   }
@@ -305,10 +292,10 @@ export default function AdminBikeDetailPage() {
     return (
       <div className="space-y-4">
         <div className="rounded-sm border border-danger-border bg-danger-soft p-4 text-sm text-danger">
-          {error || 'Không tìm thấy mẫu xe yêu cầu.'}
+          {error || t('adminBikeDetail.notFound')}
         </div>
         <Link href="/admin/bikes" className="text-xs font-semibold text-signal hover:underline">
-          ← Quay lại danh sách xe
+          &larr; {t('adminBikeDetail.backList')}
         </Link>
       </div>
     );
@@ -323,12 +310,17 @@ export default function AdminBikeDetailPage() {
             className="inline-flex items-center gap-1 text-xs font-semibold text-ink-secondary hover:text-signal"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Danh sách Xe
+            {t('adminBikeDetail.backList')}
           </Link>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-ink">{bike.name}</h1>
           <p className="font-mono text-xs text-ink-muted">
-            SKU: {bike.sku} · Version: v{bike.version} · Kho khả dụng: {bike.availableQty}/
-            {bike.stockQty} · Giá: {formatVnd(bike.priceVnd)}
+            {t('adminBikeDetail.metaLine', {
+              sku: bike.sku,
+              version: bike.version,
+              avail: bike.availableQty,
+              stock: bike.stockQty,
+              price: formatVnd(bike.priceVnd, locale),
+            })}
           </p>
         </div>
 
@@ -338,7 +330,7 @@ export default function AdminBikeDetailPage() {
             target="_blank"
             className="rounded-sm border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink hover:border-line-strong"
           >
-            Xem trên Storefront
+            {t('adminBikeDetail.viewStorefront')}
           </Link>
           <button
             type="button"
@@ -346,7 +338,7 @@ export default function AdminBikeDetailPage() {
             className="inline-flex items-center gap-1.5 rounded-sm border border-line-strong bg-surface px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
+            {t('common.refresh')}
           </button>
         </div>
       </div>
@@ -363,30 +355,32 @@ export default function AdminBikeDetailPage() {
       )}
 
       <Tabs.Root defaultValue="calibration" className="space-y-4">
-        <Tabs.List className="flex flex-wrap gap-1 border-b border-line bg-surface p-1.5 rounded-sm">
+        <Tabs.List className="flex flex-wrap gap-1 rounded-sm border-b border-line bg-surface p-1.5">
           <Tabs.Trigger
             value="general"
             className="rounded-sm px-3 py-2 text-xs font-semibold text-ink-secondary data-[state=active]:bg-ink data-[state=active]:text-surface"
           >
-            1. Thông tin &amp; Tồn kho
+            {t('adminBikeDetail.tabs.general')}
           </Tabs.Trigger>
           <Tabs.Trigger
             value="geometry"
             className="rounded-sm px-3 py-2 text-xs font-semibold text-ink-secondary data-[state=active]:bg-ink data-[state=active]:text-surface"
           >
-            2. Thông số Hình học (mm)
+            {t('adminBikeDetail.tabs.geometry')}
           </Tabs.Trigger>
           <Tabs.Trigger
             value="calibration"
             className="rounded-sm px-3 py-2 text-xs font-semibold text-ink-secondary data-[state=active]:bg-signal data-[state=active]:text-surface"
           >
-            3. Media &amp; Blueprint Calibration
+            {t('adminBikeDetail.tabs.calibration')}
           </Tabs.Trigger>
           <Tabs.Trigger
             value="compatibility"
             className="rounded-sm px-3 py-2 text-xs font-semibold text-ink-secondary data-[state=active]:bg-ink data-[state=active]:text-surface"
           >
-            4. Ma trận Phụ kiện ({bike.compatibilities?.length ?? 0})
+            {t('adminBikeDetail.tabs.compatibility', {
+              count: bike.compatibilities?.length ?? 0,
+            })}
           </Tabs.Trigger>
         </Tabs.List>
 
@@ -394,11 +388,13 @@ export default function AdminBikeDetailPage() {
         <Tabs.Content value="general">
           <form
             onSubmit={handleSaveGeneral}
-            className="rounded-sm border border-line bg-surface p-5 space-y-4 text-xs"
+            className="space-y-4 rounded-sm border border-line bg-surface p-5 text-xs"
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Tên mẫu xe</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.name')}
+                </span>
                 <input
                   disabled={!isAdmin}
                   value={generalForm.name}
@@ -408,7 +404,9 @@ export default function AdminBikeDetailPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Phân khúc</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.category')}
+                </span>
                 <select
                   disabled={!isAdmin}
                   value={generalForm.category}
@@ -424,7 +422,9 @@ export default function AdminBikeDetailPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Riding Focus</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.ridingFocus')}
+                </span>
                 <select
                   disabled={!isAdmin}
                   value={generalForm.ridingFocus}
@@ -440,7 +440,9 @@ export default function AdminBikeDetailPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Giá bán (VND)</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.priceVnd')}
+                </span>
                 <input
                   type="number"
                   disabled={!isAdmin}
@@ -451,7 +453,9 @@ export default function AdminBikeDetailPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Tiền cọc (VND)</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.depositVnd')}
+                </span>
                 <input
                   type="number"
                   disabled={!isAdmin}
@@ -464,7 +468,9 @@ export default function AdminBikeDetailPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Tồn kho vật lý (stockQty)</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.stockQty')}
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -475,7 +481,9 @@ export default function AdminBikeDetailPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-semibold text-ink-secondary">Trạng thái kinh doanh</span>
+                <span className="font-semibold text-ink-secondary">
+                  {t('adminBikeDetail.fields.status')}
+                </span>
                 <select
                   value={generalForm.status}
                   onChange={(e) => setGeneralForm((p) => ({ ...p, status: e.target.value }))}
@@ -491,7 +499,9 @@ export default function AdminBikeDetailPage() {
             </div>
 
             <label className="block space-y-1">
-              <span className="font-semibold text-ink-secondary">Mô tả ngắn</span>
+              <span className="font-semibold text-ink-secondary">
+                {t('adminBikeDetail.fields.shortSummary')}
+              </span>
               <textarea
                 rows={2}
                 disabled={!isAdmin}
@@ -508,7 +518,7 @@ export default function AdminBikeDetailPage() {
                 className="inline-flex items-center gap-2 rounded-sm bg-ink px-4 py-2 font-semibold text-surface hover:bg-signal disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
-                {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                {saving ? t('common.saving') : t('common.save')}
               </button>
             </div>
           </form>
@@ -519,26 +529,26 @@ export default function AdminBikeDetailPage() {
           {geoForm && (
             <form
               onSubmit={handleSaveGeometry}
-              className="rounded-sm border border-line bg-surface p-5 space-y-4 text-xs"
+              className="space-y-4 rounded-sm border border-line bg-surface p-5 text-xs"
             >
               <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {[
-                  ['unladenSeatHeightMm', 'Chiều cao yên không tải (mm)'],
-                  ['seatWidthMm', 'Bề rộng yên (mm)'],
-                  ['wheelbaseMm', 'Chiều dài cơ sở Wheelbase (mm)'],
-                  ['groundClearanceMm', 'Khoảng sáng gầm (mm)'],
-                  ['frontWheelDiameterIn', 'Vành trước (inch)'],
-                  ['rearWheelDiameterIn', 'Vành sau (inch)'],
-                  ['frontTireOuterRadiusMm', 'Bán kính lốp trước (mm)'],
-                  ['rearTireOuterRadiusMm', 'Bán kính lốp sau (mm)'],
-                  ['frontTravelMm', 'Hành trình phuộc trước (mm)'],
-                  ['rearTravelMm', 'Hành trình phuộc sau (mm)'],
-                  ['staticSagRearMm', 'Static Sag Sau (mm)'],
-                  ['staticSagFrontMm', 'Static Sag Trước (mm)'],
+                  ['unladenSeatHeightMm', 'Unladen Seat Height (mm)'],
+                  ['seatWidthMm', 'Seat Width (mm)'],
+                  ['wheelbaseMm', 'Wheelbase (mm)'],
+                  ['groundClearanceMm', 'Ground Clearance (mm)'],
+                  ['frontWheelDiameterIn', 'Front Wheel (in)'],
+                  ['rearWheelDiameterIn', 'Rear Wheel (in)'],
+                  ['frontTireOuterRadiusMm', 'Front Tire Radius (mm)'],
+                  ['rearTireOuterRadiusMm', 'Rear Tire Radius (mm)'],
+                  ['frontTravelMm', 'Front Travel (mm)'],
+                  ['rearTravelMm', 'Rear Travel (mm)'],
+                  ['staticSagRearMm', 'Static Sag Rear (mm)'],
+                  ['staticSagFrontMm', 'Static Sag Front (mm)'],
                   ['targetRiderSagRatio', 'Target Rider Sag Ratio'],
                   ['referenceRiderWeightKg', 'Ref Rider Weight (kg)'],
                   ['linkageProgressionAlpha', 'Linkage Alpha'],
-                  ['wetWeightKg', 'Trọng lượng ướt (kg)'],
+                  ['wetWeightKg', 'Wet Weight (kg)'],
                   ['seatPocketXMm', 'Seat Pocket X (mm)'],
                   ['seatPocketYMm', 'Seat Pocket Y (mm)'],
                   ['footpegXMm', 'Footpeg X (mm)'],
@@ -560,7 +570,9 @@ export default function AdminBikeDetailPage() {
                 ))}
 
                 <label className="space-y-1">
-                  <span className="font-semibold text-ink-secondary">Độ cứng mút yên</span>
+                  <span className="font-semibold text-ink-secondary">
+                    {t('adminBikeDetail.fields.seatFoam')}
+                  </span>
                   <select
                     disabled={!isAdmin}
                     value={geoForm.seatFoamFirmness || 'MEDIUM'}
@@ -586,7 +598,7 @@ export default function AdminBikeDetailPage() {
                     className="inline-flex items-center gap-2 rounded-sm bg-ink px-4 py-2 font-semibold text-surface hover:bg-signal disabled:opacity-50"
                   >
                     <Save className="h-4 w-4" />
-                    {saving ? 'Đang lưu...' : 'Lưu Geometry Spec'}
+                    {saving ? t('common.saving') : t('adminBikeDetail.saveGeometryBtn')}
                   </button>
                 </div>
               )}
@@ -601,14 +613,14 @@ export default function AdminBikeDetailPage() {
 
         {/* Tab 4: Compatibility Matrix */}
         <Tabs.Content value="compatibility">
-          <div className="rounded-sm border border-line bg-surface p-5 space-y-4">
+          <div className="space-y-4 rounded-sm border border-line bg-surface p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-ink">
-                  Ma trận Phụ kiện tương thích (BikeAccessoryCompatibility)
+                  {t('adminBikeDetail.compatTitle')}
                 </h3>
                 <p className="text-xs text-ink-secondary">
-                  Chọn các phụ tùng lắp vừa cho {bike.name} và hiệu chỉnh mức hạ yên thực tế (mm).
+                  {t('adminBikeDetail.compatSubtitle', { name: bike.name })}
                 </p>
               </div>
               {isAdmin && (
@@ -619,7 +631,7 @@ export default function AdminBikeDetailPage() {
                   className="inline-flex items-center gap-2 rounded-sm bg-ink px-4 py-2 text-xs font-semibold text-surface hover:bg-signal disabled:opacity-50"
                 >
                   <Check className="h-4 w-4" />
-                  {saving ? 'Đang lưu...' : 'Lưu Ma trận Tương thích (PUT)'}
+                  {saving ? t('common.saving') : t('adminBikeDetail.saveCompatBtn')}
                 </button>
               )}
             </div>
@@ -628,13 +640,13 @@ export default function AdminBikeDetailPage() {
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-line bg-canvas text-[11px] uppercase tracking-wider text-ink-muted">
                   <tr>
-                    <th className="px-3 py-2.5">Chọn</th>
-                    <th className="px-3 py-2.5">Phụ kiện</th>
-                    <th className="px-3 py-2.5">Loại</th>
-                    <th className="px-3 py-2.5">Hạ yên exact (mm)</th>
-                    <th className="px-3 py-2.5">Hạ phuộc (mm)</th>
-                    <th className="px-3 py-2.5">Công lắp (VND)</th>
-                    <th className="px-3 py-2.5">Ghi chú lắp đặt</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.select')}</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.accessory')}</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.type')}</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.seatDrop')}</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.forkDrop')}</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.labor')}</th>
+                    <th className="px-3 py-2.5">{t('adminBikeDetail.compatCols.notes')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -676,7 +688,7 @@ export default function AdminBikeDetailPage() {
                                 [acc.id]: { ...draft, exactSeatDropMm: e.target.value },
                               }))
                             }
-                            placeholder="Mặc định"
+                            placeholder={t('adminBikeDetail.defaultPlaceholder')}
                             className="w-24 rounded-sm border border-line bg-canvas px-2 py-1 font-mono text-xs disabled:opacity-40"
                           />
                         </td>
@@ -720,7 +732,7 @@ export default function AdminBikeDetailPage() {
                                 [acc.id]: { ...draft, fitmentNotes: e.target.value },
                               }))
                             }
-                            placeholder="Ghi chú kỹ thuật..."
+                            placeholder={t('adminBikeDetail.notesPlaceholder')}
                             className="w-full min-w-[160px] rounded-sm border border-line bg-canvas px-2 py-1 text-xs disabled:opacity-40"
                           />
                         </td>

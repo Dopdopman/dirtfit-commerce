@@ -6,20 +6,27 @@ import { Moon, RotateCcw, ShoppingCart, Sun } from 'lucide-react';
 import ParametricBikeSvg from '@/components/simulator/ParametricBikeSvg';
 import RiderFigureSvg from '@/components/simulator/RiderFigureSvg';
 import TechnicalSlider from '@/components/ui/TechnicalSlider';
-import { formatMm, formatVnd, getFitStatusMeta, getSagStatusMeta } from '@/lib/formatters';
-import { VI_DICT } from '@/lib/i18n/vi';
+import {
+  formatMm,
+  formatSignedDelta,
+  formatVnd,
+  getFitStatusMeta,
+  getSagStatusMeta,
+} from '@/lib/formatters';
 import { buildSimulatorScene } from '@/lib/simulator-helpers';
 import { useCart, useRiderProfile } from '@/providers/AppProviders';
+import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Interactive 60fps 5-Layer 2D Parametric Rider Fit Simulator & Smart Upsell Workbench.
  * @param {object} props
  * @param {object} props.bike
- * @returns {import('react').JSX.Element}
+ * @returns {import('react').JSX.Element|null}
  */
 export default function RiderFitSimulator({ bike }) {
   const { riderProfile, setRiderProfile } = useRiderProfile();
   const { addComboBundle, addItem } = useCart();
+  const { locale, dict, t } = useI18n();
 
   const [darkBlueprint, setDarkBlueprint] = useState(false);
   const [mods, setMods] = useState({
@@ -69,8 +76,8 @@ export default function RiderFitSimulator({ bike }) {
   }
 
   const { evaluation, svgWireframe, svgJoints, referenceLines, rulerTicks, viewport } = scene;
-  const fitMeta = getFitStatusMeta(evaluation.footContact.contactStatus);
-  const sagMeta = getSagStatusMeta(evaluation.sag.sagStatus);
+  const fitMeta = getFitStatusMeta(evaluation.footContact.contactStatus, locale);
+  const sagMeta = getSagStatusMeta(evaluation.sag.sagStatus, locale);
   const topUpsell = evaluation.upsellSuggestions?.[0] ?? null;
 
   const isSeatedOrStanding =
@@ -113,27 +120,31 @@ export default function RiderFitSimulator({ bike }) {
     }
   };
 
+  const seatDeltaMm = Math.round(
+    evaluation.sag.effectiveSeatHeightMm - bike.geometrySpec.unladenSeatHeightMm
+  );
+
   return (
     <section
       id="simulator"
       className="mt-8 border border-line bg-surface"
-      aria-label="2D Rider Fit Simulator"
+      aria-label={t('simulator.title')}
     >
       {/* Top Status Strip */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-bold uppercase tracking-widest text-ink-muted">
-            2D RIDER FIT WORKBENCH
+            {t('simulator.title')}
           </span>
           <span
             className={`rounded-sm border px-2.5 py-0.5 text-xs font-semibold ${fitMeta.className}`}
           >
-            {fitMeta.label} ({evaluation.footContact.footContactPercent}% bàn chân)
+            {fitMeta.label} ({evaluation.footContact.footContactPercent}%)
           </span>
           <span
             className={`rounded-sm border px-2.5 py-0.5 text-xs font-semibold ${sagMeta.className}`}
           >
-            {sagMeta.label} · {evaluation.sag.sagPercentOfTravel}% hành trình
+            {sagMeta.label} · {evaluation.sag.sagPercentOfTravel}%
           </span>
         </div>
 
@@ -144,7 +155,7 @@ export default function RiderFitSimulator({ bike }) {
             className="inline-flex items-center gap-1.5 rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-secondary hover:border-line-strong hover:text-ink"
           >
             {darkBlueprint ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            {darkBlueprint ? 'Nền giấy CAD' : 'Blueprint tối'}
+            {darkBlueprint ? t('simulator.darkGridOn') : t('simulator.darkGridOff')}
           </button>
           <button
             type="button"
@@ -152,7 +163,7 @@ export default function RiderFitSimulator({ bike }) {
             className="inline-flex items-center gap-1 rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-secondary hover:border-line-strong hover:text-ink"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            Mặc định
+            {t('simulator.resetMods')}
           </button>
         </div>
       </div>
@@ -165,7 +176,7 @@ export default function RiderFitSimulator({ bike }) {
               viewBox={`0 0 ${viewport.widthPx} ${viewport.heightPx}`}
               className="h-auto w-full select-none"
               role="img"
-              aria-label={`Mô phỏng tư thế ngồi xe ${bike.name}`}
+              aria-label={`${bike.name} ${t('simulator.title')}`}
             >
               {/* Layer 1: Millimeter Y-Axis Ruler & Ground Line */}
               <line
@@ -208,7 +219,7 @@ export default function RiderFitSimulator({ bike }) {
                 strokeWidth="2"
               />
 
-              {/* Layer 2: Parametric Millimeter-Accurate Bike Wireframe */}
+              {/* Layer 2: Parametric Millimeter-Accurate Enduro/Dirtbike CAD */}
               <ParametricBikeSvg
                 svgWireframe={svgWireframe}
                 variant={darkBlueprint ? 'dark' : 'primary'}
@@ -232,7 +243,7 @@ export default function RiderFitSimulator({ bike }) {
                 fontFamily="var(--font-mono), monospace"
                 fill={darkBlueprint ? '#9CA3AF' : '#52565E'}
               >
-                Yên tĩnh: {bike.geometrySpec.unladenSeatHeightMm}mm
+                {t('simulator.legendUnladenSeat')}: {bike.geometrySpec.unladenSeatHeightMm}mm
               </text>
 
               <line
@@ -252,11 +263,8 @@ export default function RiderFitSimulator({ bike }) {
                 fontFamily="var(--font-mono), monospace"
                 fill="#E84C1E"
               >
-                Yên thực tế: {evaluation.sag.effectiveSeatHeightMm}mm (-
-                {Math.round(
-                  bike.geometrySpec.unladenSeatHeightMm - evaluation.sag.effectiveSeatHeightMm
-                )}
-                mm)
+                {t('simulator.legendLoadedSeat')}: {evaluation.sag.effectiveSeatHeightMm}mm (
+                {formatSignedDelta(seatDeltaMm, 'mm')})
               </text>
 
               {/* Layer 4: Articulated Anatomical Rider */}
@@ -287,7 +295,6 @@ export default function RiderFitSimulator({ bike }) {
                     fontFamily="var(--font-mono), monospace"
                     fill={darkBlueprint ? '#F9FAFB' : '#111214'}
                   >
-                    Gối{' '}
                     {riderProfile.stanceMode === STANCE_MODES.STANDING_ATTACK
                       ? evaluation.kinematics.standing.kneeAngleDeg
                       : evaluation.kinematics.seated.kneeAngleDeg}
@@ -301,7 +308,9 @@ export default function RiderFitSimulator({ bike }) {
           {/* Monospace Live Telemetry Readout Row */}
           <div className="grid grid-cols-2 divide-x divide-y divide-line border-t border-line sm:grid-cols-4 sm:divide-y-0">
             <div className="p-3.5">
-              <div className="text-[11px] uppercase tracking-wider text-ink-muted">Fit Score</div>
+              <div className="text-[11px] uppercase tracking-wider text-ink-muted">
+                {t('simulator.fitScoreLabel')}
+              </div>
               <div className="mt-1 text-xl font-bold text-ink tabular-telemetry">
                 {evaluation.fitScore}
                 <span className="text-xs font-normal text-ink-muted"> /100</span>
@@ -309,7 +318,7 @@ export default function RiderFitSimulator({ bike }) {
             </div>
             <div className="p-3.5">
               <div className="text-[11px] uppercase tracking-wider text-ink-muted">
-                Yên sau khi nén
+                {t('simulator.effectiveSeatLabel')}
               </div>
               <div className="mt-1 text-xl font-bold text-signal tabular-telemetry">
                 {formatMm(evaluation.sag.effectiveSeatHeightMm)}
@@ -317,23 +326,19 @@ export default function RiderFitSimulator({ bike }) {
             </div>
             <div className="p-3.5">
               <div className="text-[11px] uppercase tracking-wider text-ink-muted">
-                Góc gối / Lưng ngồi
+                {t('simulator.riderSagLabel')}
               </div>
               <div className="mt-1 text-base font-bold text-ink tabular-telemetry">
-                {evaluation.kinematics.seated.kneeAngleDeg}° /{' '}
-                {evaluation.kinematics.seated.torsoLeanDeg}°
+                {evaluation.sag.riderSagRearMm} mm ({evaluation.sag.sagPercentOfTravel}%)
               </div>
             </div>
             <div className="p-3.5">
               <div className="text-[11px] uppercase tracking-wider text-ink-muted">
-                Nghiêng lưng đứng
+                {t('simulator.kneeAngleLabel')}
               </div>
               <div className="mt-1 text-base font-bold text-ink tabular-telemetry">
-                {evaluation.kinematics.standing.torsoLeanDeg}° (
-                {evaluation.kinematics.standing.recommendedBarRiserMm > 0
-                  ? `Cần nâng +${evaluation.kinematics.standing.recommendedBarRiserMm}mm`
-                  : 'Ổn định'}
-                )
+                {evaluation.kinematics.seated.kneeAngleDeg}° /{' '}
+                {evaluation.kinematics.seated.torsoLeanDeg}°
               </div>
             </div>
           </div>
@@ -343,7 +348,7 @@ export default function RiderFitSimulator({ bike }) {
         <div className="flex flex-col justify-between p-5 lg:col-span-4">
           <div className="space-y-5">
             <TechnicalSlider
-              label="Chiều cao người lái"
+              label={t('simulator.heightSlider')}
               value={riderProfile.heightCm}
               min={145}
               max={205}
@@ -351,7 +356,7 @@ export default function RiderFitSimulator({ bike }) {
               onChange={(heightCm) => setRiderProfile({ heightCm })}
             />
             <TechnicalSlider
-              label="Cân nặng cơ thể"
+              label={t('simulator.weightSlider')}
               value={riderProfile.weightKg}
               min={45}
               max={135}
@@ -359,7 +364,7 @@ export default function RiderFitSimulator({ bike }) {
               onChange={(weightKg) => setRiderProfile({ weightKg })}
             />
             <TechnicalSlider
-              label={`Chiều dài chân trong (Inseam${evaluation.anthropometry.isInseamEstimated ? ' · tự ước tính' : ''})`}
+              label={t('simulator.inseamSlider')}
               value={riderProfile.inseamCm ?? evaluation.anthropometry.inseamCm}
               min={62}
               max={105}
@@ -368,9 +373,11 @@ export default function RiderFitSimulator({ bike }) {
             />
 
             <div>
-              <div className="mb-1.5 text-xs font-medium text-ink-secondary">Loại giày chạy xe</div>
+              <div className="mb-1.5 text-xs font-medium text-ink-secondary">
+                {t('simulator.bootsSelect')}
+              </div>
               <div className="grid grid-cols-3 gap-1.5">
-                {Object.entries(VI_DICT.footwear).map(([key, label]) => {
+                {Object.entries(dict.enums.footwear).map(([key, label]) => {
                   const active = riderProfile.footwear === key;
                   return (
                     <button
@@ -391,9 +398,11 @@ export default function RiderFitSimulator({ bike }) {
             </div>
 
             <div>
-              <div className="mb-1.5 text-xs font-medium text-ink-secondary">Tư thế mô phỏng</div>
+              <div className="mb-1.5 text-xs font-medium text-ink-secondary">
+                {t('simulator.stanceSelect')}
+              </div>
               <div className="grid grid-cols-2 gap-1.5">
-                {Object.entries(VI_DICT.stance).map(([key, label]) => {
+                {Object.entries(dict.enums.stance).map(([key, label]) => {
                   const active = riderProfile.stanceMode === key;
                   return (
                     <button
@@ -415,7 +424,7 @@ export default function RiderFitSimulator({ bike }) {
 
             <div>
               <div className="mb-1.5 text-xs font-medium text-ink-secondary">
-                Bật / Tắt phụ kiện hạ yên nhanh
+                {t('simulator.modControlTitle')}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -427,7 +436,7 @@ export default function RiderFitSimulator({ bike }) {
                       : 'border-line bg-canvas text-ink'
                   }`}
                 >
-                  Link hạ phuộc (-30mm)
+                  {t('simulator.modLoweringLink')}
                 </button>
                 <button
                   type="button"
@@ -438,7 +447,7 @@ export default function RiderFitSimulator({ bike }) {
                       : 'border-line bg-canvas text-ink'
                   }`}
                 >
-                  Yên thấp (-25mm)
+                  {t('simulator.modLowSeat')}
                 </button>
                 <button
                   type="button"
@@ -449,14 +458,14 @@ export default function RiderFitSimulator({ bike }) {
                       : 'border-line bg-canvas text-ink'
                   }`}
                 >
-                  Gù nâng ghi đông (+30mm)
+                  {t('simulator.modBarRiser')}
                 </button>
               </div>
             </div>
 
             {evaluation.warnings.length > 0 && (
               <div className="border border-fit-tiptoe/40 bg-orange-50 px-3 py-2 text-xs text-fit-tiptoe">
-                Cảnh báo kỹ thuật: {evaluation.warnings.join(', ')}
+                {evaluation.warnings.join(', ')}
               </div>
             )}
           </div>
@@ -466,13 +475,13 @@ export default function RiderFitSimulator({ bike }) {
             {topUpsell ? (
               <div className="border border-line-strong bg-canvas p-3.5">
                 <div className="flex items-center justify-between text-xs font-bold text-signal tabular-telemetry">
-                  <span>GỢI Ý SMART UPSELL</span>
-                  <span>+{topUpsell.fitScoreGain} ĐIỂM FIT</span>
+                  <span>{t('simulator.upsellTitle')}</span>
+                  <span>+{topUpsell.fitScoreGain} FIT</span>
                 </div>
                 <div className="mt-1 text-sm font-bold text-ink">{topUpsell.title}</div>
                 <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                  Hạ yên còn {topUpsell.afterSeatHeightMm}mm · Phụ kiện + lắp:{' '}
-                  {formatVnd(topUpsell.estimatedTotalCostVnd)}
+                  {formatMm(topUpsell.afterSeatHeightMm)} ·{' '}
+                  {formatVnd(topUpsell.estimatedTotalCostVnd, locale)}
                 </div>
                 {topUpsell.technicalNotes?.[0] && (
                   <p className="mt-1 text-[11px] text-ink-muted">{topUpsell.technicalNotes[0]}</p>
@@ -484,7 +493,14 @@ export default function RiderFitSimulator({ bike }) {
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-sm bg-signal px-4 py-2 text-xs font-bold text-surface hover:bg-signal-hover disabled:opacity-50"
                 >
                   <ShoppingCart className="h-3.5 w-3.5" />
-                  Thêm Combo Xe + Phụ kiện vào giỏ
+                  {bundleBusy
+                    ? t('simulator.addingCombo')
+                    : t('simulator.addComboBtn', {
+                        total: formatVnd(
+                          bike.priceVnd + (topUpsell.estimatedTotalCostVnd ?? 0),
+                          locale
+                        ),
+                      })}
                 </button>
               </div>
             ) : (
@@ -495,7 +511,7 @@ export default function RiderFitSimulator({ bike }) {
                 className="flex w-full items-center justify-center gap-2 rounded-sm bg-signal px-4 py-2.5 text-sm font-bold text-surface hover:bg-signal-hover disabled:opacity-50"
               >
                 <ShoppingCart className="h-4 w-4" />
-                Thêm xe vào giỏ hàng
+                {t('bikeDetail.addToCart')}
               </button>
             )}
           </div>

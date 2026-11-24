@@ -1,6 +1,9 @@
 import { Be_Vietnam_Pro, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import StorefrontShell from '@/components/layout/StorefrontShell';
+import { getServerLocale } from '@/lib/i18n/server';
+import { getDictionary } from '@/lib/i18n/translate';
 import AppProviders from '@/providers/AppProviders';
+import I18nProvider from '@/providers/I18nProvider';
 import './globals.css';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -24,28 +27,40 @@ const jetBrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
-export const metadata = {
-  title: 'DirtFit Commerce — Xe Máy Địa Hình & Mô Phỏng Vóc Dáng 2D',
-  description:
-    'Nền tảng thương mại điện tử chuyên xe máy địa hình Enduro, Dual-Sport, Motocross, Adventure kèm 2D Parametric Rider Fit Simulator.',
-};
+/**
+ * Dynamic SSR metadata aligned with active `dirtfit_locale` cookie (default: 'en').
+ * @returns {Promise<import('next').Metadata>}
+ */
+export async function generateMetadata() {
+  const locale = await getServerLocale();
+  const dict = getDictionary(locale);
+  return {
+    title: dict.meta.siteTitle,
+    description: dict.meta.siteDescription,
+    manifest: '/manifest.webmanifest',
+  };
+}
 
 /**
- * Root App Router layout loading 3 Vietnamese-ready fonts and Storefront providers.
+ * Root App Router layout loading 3 multilingual fonts, SSR locale, and providers.
  * @param {object} props
  * @param {import('react').ReactNode} props.children
- * @returns {import('react').JSX.Element}
+ * @returns {Promise<import('react').JSX.Element>}
  */
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const locale = await getServerLocale();
+
   return (
     <html
-      lang="vi"
+      lang={locale}
       className={`${plusJakartaSans.variable} ${beVietnamPro.variable} ${jetBrainsMono.variable}`}
     >
       <body className="flex min-h-screen flex-col bg-canvas text-ink">
-        <AppProviders>
-          <StorefrontShell>{children}</StorefrontShell>
-        </AppProviders>
+        <I18nProvider initialLocale={locale}>
+          <AppProviders>
+            <StorefrontShell>{children}</StorefrontShell>
+          </AppProviders>
+        </I18nProvider>
       </body>
     </html>
   );
