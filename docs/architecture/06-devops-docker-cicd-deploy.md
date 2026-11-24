@@ -219,6 +219,7 @@ HOST=0.0.0.0
 APP_URL=http://localhost:3000
 API_URL=http://localhost:4000
 LOG_LEVEL=info
+SWAGGER_ENABLED=true
 
 # Database (Neon: DATABASE_URL uses ?pgbouncer=true&connection_limit=5, DIRECT_URL is non-pooled)
 DATABASE_URL=postgresql://dirtfit:dirtfit_local_dev_password@localhost:5432/dirtfit_db
@@ -231,9 +232,14 @@ REDIS_URL=redis://localhost:6379
 JWT_ACCESS_SECRET=replace-with-64-byte-hex-secret
 JWT_ACCESS_TTL=15m
 REFRESH_TOKEN_TTL_DAYS=14
+REFRESH_TOKEN_PEPPER=replace-with-32-byte-hex-pepper-for-refresh-token-hmac
 COOKIE_SECRET=replace-with-32-byte-hex-secret
+COOKIE_SAME_SITE=lax
+COOKIE_SECURE=false
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 CRON_HMAC_SECRET=replace-with-32-byte-hex-secret
+RATE_LIMIT_GLOBAL_MAX=120
+RATE_LIMIT_AUTH_MAX=10
 
 # Cloudflare R2 (S3-compatible Storage)
 R2_ACCOUNT_ID=your-cloudflare-account-id

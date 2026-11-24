@@ -84,9 +84,9 @@ flowchart TD
   - Core plugins: `prisma`, `redis` (L1 LRU + L2 Redis), `security` (Helmet, strict CORS, Cookie, Rate Limit), `swagger`, `error-handler` (RFC 7807), `auth` (`authenticate`, `requireRole`).
   - Modules: `health` (`/health/live`, `/health/ready`), `auth` (Argon2id register/login, refresh rotation + family revoke, logout, logout-all, password reset), `users` (Profile + `UserBodyProfile` CRUD + Admin Users), `audit` (`AuditLog` service).
 - **Definition of Done (DoD):**
-  - [ ] `/docs` Swagger UI renders full Zod-derived OpenAPI 3.0 specs.
-  - [ ] Integration tests (`app.inject()`) pass 100%: Argon2id login, Refresh Token Rotation, **Token Reuse Detection revoking full family**, RBAC `403`, IDOR checks, and RFC 7807 errors.
-  - [ ] Pino logs redact `password`, `cookie`, and `authorization`.
+  - [x] `/docs` Swagger UI renders full Zod-derived OpenAPI 3.0 specs.
+  - [x] Integration tests (`app.inject()`) pass 100%: Argon2id login, Refresh Token Rotation, **Token Reuse Detection revoking full family**, RBAC `403`, IDOR checks, and RFC 7807 errors.
+  - [x] Pino logs redact `password`, `cookie`, and `authorization`.
 
 ---
 

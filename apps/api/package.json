@@ -7,8 +7,8 @@
     "seed": "node prisma/seed.js"
   },
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "verify:compat": "node scripts/verify-stack-compat.mjs",
@@ -32,6 +32,7 @@
     "@prisma/client": "6.19.3",
     "argon2": "0.45.2",
     "fastify": "5.12.8",
+    "fastify-plugin": "6.0.1",
     "fastify-type-provider-zod": "4.0.2",
     "ioredis": "6.1.0",
     "lru-cache": "11.5.3",
