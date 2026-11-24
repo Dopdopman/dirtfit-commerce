@@ -1,0 +1,25 @@
+# Dependencies & package managers
+node_modules/
+.pnpm-store/
+
+# Build & cache artifacts
+.next/
+.turbo/
+dist/
+build/
+coverage/
+out/
+
+# Environment variables (keep templates)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs & OS artifacts
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db

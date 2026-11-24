@@ -1,0 +1,25 @@
+{
+  "name": "@dirtfit/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "dependencies": {
+    "@dirtfit/ergonomics-engine": "workspace:*",
+    "@dirtfit/shared": "workspace:*",
+    "next": "15.5.29",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  },
+  "devDependencies": {
+    "autoprefixer": "10.7.0",
+    "postcss": "8.5.33",
+    "tailwindcss": "3.4.19"
+  }
+}

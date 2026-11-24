@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-canvas: #f7f7f5;
+  --bg-surface: #ffffff;
+  --text-primary: #111214;
+  --accent-signal: #e84c1e;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
