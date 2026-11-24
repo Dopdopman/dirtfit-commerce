@@ -1,85 +1,129 @@
 # DirtFit Commerce
 
-A production-grade e-commerce platform specialized in **Off-Road, Motocross, Enduro, Dual-Sport, and Adventure Motorcycles** alongside compatible ergonomics/protection parts, featuring an interactive **2D Parametric Rider Fit & Ergonomics Simulator**.
+A specialized e-commerce platform for **Off-Road, Motocross, Enduro, Dual-Sport, and Adventure Motorcycles** plus compatible ergonomic/protection accessories, powered by an interactive **2D Parametric Rider Fit & Ergonomics Simulator**.
 
-> **Strict Engineering Mandate:** **100% Pure JavaScript (ES Modules / ESM)** — zero TypeScript (`.ts`, `.tsx`, `tsconfig.json`). Uses **JSDoc** for editor type hints and **Zod (`.strict()`)** for runtime validation and automatic OpenAPI 3.0 generation.
-
----
-
-## Core Differentiator: 2D Rider Fit & Ergonomics Simulator
-
-Seat height is the #1 purchase barrier for dirtbike and adventure riders. DirtFit solves this with a physics- and analytical-geometry-backed simulator shared between the browser (60fps) and backend API:
-
-- **Suspension Sag Physics:** Computes static and rider sag from suspension travel, progression linkage alpha, rider + gear weight, and spring rate ratio to derive **Effective Seat Height (mm)**.
-- **Seat Width & Footwear Mechanics:** Accounts for seat edge wrap loss, lateral leg splay, and boot ankle-flexion limits (`SNEAKERS`, `ADV_BOOTS`, `MX_BOOTS`) to classify ground reach (`FLAT_FOOT`, `BALLS_OF_FEET`, `TIP_TOE`, `ONE_FOOT_SHIFT`, `TOO_TALL_UNSAFE`).
-- **2D Analytical Inverse Kinematics (Rider Triangle):** Solves joint coordinates and ergonomic angles (knee, hip, torso lean, elbow) for both **Seated Cruising** and **Standing Off-Road Attack** stances.
-- **Ghost Overlay & Smart Upsell:** Millimeter-accurate 2-bike overlay comparison plus compatibility-aware recommendations for lowering links, low seats, and bar risers with 1-click bundle add-to-cart.
+> **Strict Engineering Mandate:** **100% Pure JavaScript (ES Modules / ESM)** — zero TypeScript (`.ts`, `.tsx`, `tsconfig.json`, or `typescript`). Uses **JSDoc** for type hints and **Zod (`.strict()`)** for runtime validation and automatic OpenAPI 3.0 generation.
 
 ---
 
-## Locked Pure JS ESM Tech Stack
+## Key Capabilities
 
-| Layer                     | Technology & Pinned Version                                                                    | Notes                                                                                   |
-| :------------------------ | :--------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
-| **Runtime & Monorepo**    | `Node.js >=22.11.0 <23`, `pnpm@10.28.2`, `turbo@2.11.13`                                       | Native ESM (`"type": "module"`), zero-build internal packages                           |
-| **Backend (`apps/api`)**  | `fastify@5.12.8`, `zod@3.25.76`, `fastify-type-provider-zod@4.0.2`, `@fastify/swagger@9.9.5`   | Modular Monolith (Clean Architecture), RFC 7807 errors, Pino logs                       |
-| **Database & Cache**      | `prisma@6.19.3`, PostgreSQL 16, Redis 7 (`ioredis@6.1.0`, `lru-cache@11.5.3`)                  | `BIGINT` VND in DB → safe `Number` in JS/API; `SELECT ... FOR UPDATE` + Lazy Expiration |
-| **Auth & Security**       | `argon2@0.45.2`, `@fastify/jwt@10.2.9`, `@fastify/helmet@13.2.0`, `@fastify/rate-limit@11.3.0` | Refresh Token Rotation + Reuse Detection, RBAC, OWASP Top 10                            |
-| **Frontend (`apps/web`)** | `next@15.5.29` (App Router `.jsx`), `react@19.2.9`, `tailwindcss@3.4.19`                       | Industrial Motorsport / Technical Editorial UI (`tabular-nums`)                         |
-| **Quality & Testing**     | `eslint@9.39.5`, `eslint-plugin-jsdoc@65.5.4`, `prettier@3.10.1`, `vitest@3.2.7`               | Automated Pure-JS guardrail (`check:pure-js`)                                           |
+- **60fps 2D Rider Fit Simulator & Ghost Overlay:** Physics-backed suspension sag (`Static Sag` + `Rider Sag`), seat width & boot ankle-flexion ground reach (`FLAT_FOOT`, `BALLS_OF_FEET`, `TIP_TOE`, `ONE_FOOT_SHIFT`, `TOO_TALL_UNSAFE`), 2D analytical inverse kinematics (Seated & Standing Attack stances), side-by-side Ghost Overlay comparison (`/compare`), and smart accessory lowering bundle upsells.
+- **High-Concurrency Inventory & Payments:** PostgreSQL `SELECT ... FOR UPDATE` row locking sorted deterministically to eliminate deadlocks, inline **Lazy Expiration** reclaiming expired 15-minute holds without waiting for cron, `Idempotency-Key` checkout protection, PayOS HMAC webhooks, COD eligibility guard (`<= 20,000,000 VND`, accessories only), and non-prod Mock payment adapter.
+- **Security & RBAC:** Argon2id password hashing, Refresh Token Rotation with family-wide Reuse Detection, in-memory JWT storage + Single-Flight Refresh Queue on the frontend, 4KB Magic Bytes verification for media uploads, RFC 7807 `application/problem+json` errors, and immutable `AuditLog`.
+- **Admin & Sales Portal (`/admin/*`):** Industrial Technical Dashboard, Bike & Geometry CRUD, **Interactive 6-Anchor UV Blueprint Calibration Tool** (with live 170cm rider SVG overlay & perspective distortion check), Compatibility Matrix editor, Order State Machine controls, 3-Showroom Test Ride scheduler, and `ADMIN`-only Audit Log diff viewer.
 
 ---
 
-## Monorepo Structure
+## Architecture & Tech Stack
+
+| Layer                                     | Technology & Pinned Version                                                  | Notes                                                                          |
+| :---------------------------------------- | :--------------------------------------------------------------------------- | :----------------------------------------------------------------------------- |
+| **Runtime & Monorepo**                    | `Node.js 22.x`, `pnpm@10.28.2`, `turbo@2.11.13`                              | Native ESM (`"type": "module"`), zero-build internal packages                  |
+| **Backend (`apps/api`)**                  | `fastify@5.12.8`, `zod@3.25.76`, `prisma@6.19.3`, `ioredis@6.1.0`            | Clean Architecture modular monolith (`/api/v1`), Pino redaction                |
+| **Frontend (`apps/web`)**                 | `next@15.5.29` (`.jsx`), `react@19.2.9`, `@radix-ui/*`, `tailwindcss@3.4.19` | App Router + Next.js standalone Docker output                                  |
+| **Engine (`packages/ergonomics-engine`)** | Pure JS ESM (zero runtime deps)                                              | Shared 1:1 between browser (60fps) and Fastify Smart Rider-Fit API             |
+| **Shared (`packages/shared`)**            | `zod@3.25.76`                                                                | `.strict()` DTO schemas, error codes, `ALLOWED_ORDER_TRANSITIONS`, VND helpers |
+| **Infrastructure & CI/CD**                | Docker multi-stage non-root Alpine, GitHub Actions, Trivy                    | Designed for **$0/month Free Tier** (Neon, Upstash, R2, Render/Koyeb, Vercel)  |
+
+---
+
+## Monorepo Layout
 
 ```text
 dirtfit-commerce/
+├── .github/workflows/          # ci.yml, cd.yml, sweeper-cron.yml
 ├── apps/
-│   ├── api/                        # Fastify 5 Modular Monolith REST API (/api/v1)
-│   └── web/                        # Next.js 15 App Router Storefront & Admin Portal (.jsx)
+│   ├── api/                    # Fastify 5 API, Prisma schema/migrations, Dockerfile, entrypoint.mjs
+│   └── web/                    # Next.js 15 Storefront & /admin Portal, standalone Dockerfile
 ├── packages/
-│   ├── ergonomics-engine/          # Zero-dependency pure JS physics & 2D IK engine
-│   └── shared/                     # Shared Zod (.strict()) schemas, enums, errors, VND helpers
+│   ├── ergonomics-engine/      # Sag, foot contact, 2D IK kinematics & UV calibration math
+│   └── shared/                 # Shared enums, errors, VND BigInt/Number converters, Zod schemas
 ├── docs/
-│   └── architecture/               # Master Architecture Plan (Single Source of Truth)
+│   ├── DEPLOYMENT_FREE_TIER.md # Step-by-step $0/month production deployment & runbook
+│   └── architecture/           # Single Source of Truth master architecture docs (00–07)
 ├── scripts/
-│   └── check-pure-js.mjs           # Enforces 100% Pure JS ESM (zero TypeScript)
-└── docker-compose.yml              # Local PostgreSQL 16, Redis 7, Adminer (--profile tools)
+│   ├── check-pure-js.mjs       # Workspace guardrail blocking TypeScript artifacts
+│   └── smoke-stack.mjs         # Live full-stack HTTP & API integration smoke check
+├── docker-compose.yml          # Local dev PostgreSQL 16 + Redis 7 + Adminer (--profile tools)
+├── docker-compose.prod.yml     # 1-command full 4-container local production stack
+├── render.yaml                 # Render Free Tier Docker service blueprint
+└── vercel.json                 # Vercel security headers configuration
 ```
 
 ---
 
-## Local Quick Start (Phase 0)
+## Quick Start
 
-### Prerequisites
+### Option A: 1-Command Full-Stack Production Docker Compose
 
-- **Node.js** `22.x` (`>=22.11.0 <23`)
-- **pnpm** `10.x` (`corepack enable`)
-- **Docker** + **Docker Compose**
-
-### Setup & Verification
+Runs `postgres`, `redis`, `api` (non-root `dirtfit`, `NODE_ENV=production`), and `web` (non-root `nextjs`, Next.js `standalone`) locally:
 
 ```bash
-# 1. Install workspace dependencies
-pnpm install
-
-# 2. Start local PostgreSQL 16 & Redis 7
-docker compose up -d --wait postgres redis
-
-# 3. Run Pure-JS guardrail, lint, format, stack compatibility & test checks
-pnpm check:pure-js
-pnpm lint
-pnpm format:check
-pnpm verify:compat
-pnpm test
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-> **Environment templates:** Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env` when starting API/Web development in later phases.
+Verify health & live API/SSR integration:
+
+```bash
+pnpm smoke -- --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 --expect-prod
+```
+
+Open `http://localhost:3000` (Storefront) or `http://localhost:3000/admin` (Admin Portal). Tear down with:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+### Option B: Local Development Mode (Hot Reload)
+
+```bash
+# 1. Install dependencies & configure environment files
+pnpm install
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+
+# 2. Start PostgreSQL 16 & Redis 7
+docker compose up -d --wait postgres redis
+
+# 3. Generate Prisma Client, apply migrations & seed real-world bikes/accessories
+pnpm --filter @dirtfit/api run db:generate
+pnpm --filter @dirtfit/api run db:migrate:deploy
+pnpm --filter @dirtfit/api run db:seed
+
+# 4. Run API (:4000) + Web (:3000) concurrently
+pnpm dev
+```
 
 ---
 
-## Architecture & Implementation Status
+## Demo Accounts (Seed Data)
 
-- **Master Plan & ADRs:** [`docs/architecture/README.md`](./docs/architecture/README.md)
-- **Roadmap:** [`docs/architecture/07-implementation-roadmap.md`](./docs/architecture/07-implementation-roadmap.md)
-- **Current Milestone:** **Phase 0 (Monorepo Scaffold, Local Infrastructure & Pure-JS Guardrails)** complete; ready for **Phase 1 (`@dirtfit/ergonomics-engine` & `@dirtfit/shared`)**.
+| Role            | Email              | Password             | Access Scope                                                                              |
+| :-------------- | :----------------- | :------------------- | :---------------------------------------------------------------------------------------- |
+| **ADMIN**       | `admin@dirtfit.vn` | `Admin@DirtFit2026!` | Full Storefront, Admin Portal (`/admin/*`), Blueprint Calibration, Audit Logs             |
+| **SALES_STAFF** | `sales@dirtfit.vn` | `Sales@DirtFit2026!` | Stock/status updates, Orders State Machine, 3-Showroom Test Rides                         |
+| **CUSTOMER**    | `rider@dirtfit.vn` | `Rider@DirtFit2026!` | Storefront, Saved Body Profiles, Cart, Checkout, Test Rides (blocked `403` on `/admin/*`) |
+
+---
+
+## Useful Workspace Commands
+
+| Command                                | Description                                                                  |
+| :------------------------------------- | :--------------------------------------------------------------------------- |
+| `pnpm dev`                             | Run Fastify API & Next.js Web concurrently in watch mode                     |
+| `pnpm test`                            | Run all Vitest unit & integration suites across all 4 packages (`67` tests)  |
+| `pnpm check:pure-js`                   | Verify 100% Pure JavaScript ESM compliance across all files & `package.json` |
+| `pnpm lint`                            | Run ESLint with JSDoc, React, and React Hooks rules (zero warnings policy)   |
+| `pnpm format:check`                    | Verify Prettier formatting across workspace                                  |
+| `pnpm --filter @dirtfit/web build`     | Build Next.js production bundle                                              |
+| `pnpm audit --prod --audit-level=high` | Check production dependency vulnerability advisories                         |
+| `pnpm smoke`                           | Run live API & Web SSR smoke verification against running containers         |
+
+---
+
+## Documentation & Deployment
+
+- **\$0/Month Free Tier Deployment & Operations Guide:** [`docs/DEPLOYMENT_FREE_TIER.md`](./docs/DEPLOYMENT_FREE_TIER.md)
+- **Master Architecture Index:** [`docs/architecture/README.md`](./docs/architecture/README.md)
+- **Implementation Roadmap & DoD Checklists:** [`docs/architecture/07-implementation-roadmap.md`](./docs/architecture/07-implementation-roadmap.md)

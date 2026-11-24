@@ -1,0 +1,28 @@
+name: Inventory & Token Sweeper Cron
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  expire-reservations:
+    name: Sweep Expired Reservations & Refresh Tokens
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke internal sweeper endpoint with cold-start retry
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          CRON_HMAC_SECRET: ${{ secrets.CRON_HMAC_SECRET }}
+        run: |
+          if [ -z "$API_BASE_URL" ] || [ -z "$CRON_HMAC_SECRET" ]; then
+            echo "API_BASE_URL or CRON_HMAC_SECRET secret is not configured; skipping."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 10 \
+            -X POST "${API_BASE_URL%/}/api/v1/internal/sweeper/expire-reservations" \
+            -H "X-Cron-Secret: ${CRON_HMAC_SECRET}" \
+            -H "Content-Type: application/json"

@@ -160,6 +160,6 @@ flowchart TD
   - Live \$0 deployment across Neon PostgreSQL (PgBouncer + Direct URL), Upstash Redis, Cloudflare R2, Resend, Render/Koyeb Free (API), and Vercel Hobby (Web).
   - Operational Runbook (`docs/architecture/RUNBOOK.md`) covering safe migration rollback and secret rotation.
 - **Definition of Done (DoD):**
-  - [ ] Both production Docker images build cleanly, run as non-root (`id -u !== 0`), and report `healthy`.
-  - [ ] GitHub Actions `pr-check.yml` passes 100% (Pure-JS guard + Lint + Unit/Integration tests + Prisma Validate + Docker Build + Trivy Scan).
-  - [ ] Production environment passes live smoke tests (`/health/ready` `200`, HTTPS/TLS, Cookie Auth, R2 CDN assets, sandbox payment webhook).
+  - [x] Both production Docker images build cleanly, run as non-root (`id -u !== 0`), and report `healthy`.
+  - [x] GitHub Actions `pr-check.yml` passes 100% (Pure-JS guard + Lint + Unit/Integration tests + Prisma Validate + Docker Build + Trivy Scan).
+  - [x] Production environment passes live smoke tests (`/health/ready` `200`, HTTPS/TLS, Cookie Auth, R2 CDN assets, sandbox payment webhook).
