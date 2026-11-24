@@ -899,5 +899,128 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     expect(paths['/api/v1/payments/webhooks/payos']).toBeTruthy();
     expect(paths['/api/v1/test-rides']).toBeTruthy();
     expect(paths['/api/v1/internal/sweeper/expire-reservations']).toBeTruthy();
+    expect(paths['/api/v1/admin/bikes/{id}']).toBeTruthy();
+  });
+
+  it('enforces production/flag gating & anti-IDOR on POST /api/v1/payments/mock/complete and RBAC on GET /api/v1/admin/bikes/:id', async () => {
+    const bike = await createTestBike({ suffix: 'sec6', stockQty: 2, priceVnd: 185_000_000 });
+    const owner = await registerCustomer('sec6owner');
+    const attacker = await registerCustomer('sec6attacker');
+
+    // Admin/Sales can fetch admin bike detail; CUSTOMER gets 403
+    const [adminBikeRes, salesBikeRes, customerBikeRes] = await Promise.all([
+      app.inject({
+        method: 'GET',
+        url: `/api/v1/admin/bikes/${bike.id}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      app.inject({
+        method: 'GET',
+        url: `/api/v1/admin/bikes/${bike.id}`,
+        headers: { authorization: `Bearer ${salesToken}` },
+      }),
+      app.inject({
+        method: 'GET',
+        url: `/api/v1/admin/bikes/${bike.id}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      }),
+    ]);
+    expect(adminBikeRes.statusCode).toBe(200);
+    expect(adminBikeRes.json().data.bike.id).toBe(bike.id);
+    expect(salesBikeRes.statusCode).toBe(200);
+    expect(customerBikeRes.statusCode).toBe(403);
+
+    // Create MOCK order for owner
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/cart/items',
+      headers: { authorization: `Bearer ${owner.token}` },
+      payload: { itemType: 'BIKE', bikeId: bike.id, quantity: 1 },
+    });
+    const orderRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders/checkout',
+      headers: {
+        authorization: `Bearer ${owner.token}`,
+        'idempotency-key': `sec6-mock-${runId}`,
+      },
+      payload: {
+        orderType: 'BIKE_DEPOSIT',
+        paymentMethod: 'MOCK',
+        shippingAddress: SHIPPING_ADDRESS,
+      },
+    });
+    expect(orderRes.statusCode).toBe(201);
+    const order = orderRes.json().data.order;
+    createdOrderIds.push(order.id);
+
+    // Anti-IDOR: unrelated customer gets 403 on /payments/mock/complete
+    const idorMockComplete = await app.inject({
+      method: 'POST',
+      url: '/api/v1/payments/mock/complete',
+      headers: { authorization: `Bearer ${attacker.token}` },
+      payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
+    });
+    expect(idorMockComplete.statusCode).toBe(403);
+
+    // Disabled flag app & production app must NOT mount /payments/mock/complete (404)
+    const disabledFlagApp = await buildApp({
+      envOverrides: {
+        NODE_ENV: 'test',
+        SWAGGER_ENABLED: false,
+        ENABLE_MOCK_PAYMENT: false,
+        PAYMENT_DEFAULT_PROVIDER: 'PAYOS',
+        PAYOS_CHECKSUM_KEY: payosChecksumKey,
+      },
+      rateLimitNamespace: `df:rl:phase7:flag:${runId}:`,
+    });
+    try {
+      const flagRes = await disabledFlagApp.inject({
+        method: 'POST',
+        url: '/api/v1/payments/mock/complete',
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
+      });
+      expect(flagRes.statusCode).toBe(404);
+    } finally {
+      await disabledFlagApp.close();
+    }
+
+    const prodApp = await buildApp({
+      envOverrides: {
+        NODE_ENV: 'production',
+        SWAGGER_ENABLED: false,
+        ENABLE_MOCK_PAYMENT: false,
+        PAYMENT_DEFAULT_PROVIDER: 'PAYOS',
+        PAYOS_CHECKSUM_KEY: payosChecksumKey,
+        STORAGE_DRIVER: 'r2',
+        R2_ACCOUNT_ID: 'dummy-r2-account',
+        R2_ACCESS_KEY_ID: 'dummy-r2-access-key',
+        R2_SECRET_ACCESS_KEY: 'dummy-r2-secret-key',
+        R2_BUCKET_NAME: 'dirtfit-media-prod',
+      },
+      rateLimitNamespace: `df:rl:phase7:prod:${runId}:`,
+    });
+    try {
+      const prodRes = await prodApp.inject({
+        method: 'POST',
+        url: '/api/v1/payments/mock/complete',
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
+      });
+      expect(prodRes.statusCode).toBe(404);
+    } finally {
+      await prodApp.close();
+    }
+
+    // Owner succeeds in non-prod when ENABLE_MOCK_PAYMENT=true -> DEPOSIT_PAID
+    const ownerCompleteRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/payments/mock/complete',
+      headers: { authorization: `Bearer ${owner.token}` },
+      payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
+    });
+    expect(ownerCompleteRes.statusCode).toBe(200);
+    expect(ownerCompleteRes.json().data.order.status).toBe('DEPOSIT_PAID');
   });
 });

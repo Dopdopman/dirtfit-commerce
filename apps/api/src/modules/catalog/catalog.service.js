@@ -400,6 +400,50 @@ export async function adminListBikes(app, query) {
 }
 
 /**
+ * Fetch full motorcycle details by ID for Admin/Sales Portal editing and calibration.
+ * @param {import('fastify').FastifyInstance} app
+ * @param {string} id
+ * @returns {Promise<object>}
+ */
+export async function adminGetBikeById(app, id) {
+  const bike = await findBikeById(app.prisma, id);
+  if (!bike) {
+    throw new AppError({
+      code: ERROR_CODES.NOT_FOUND,
+      status: 404,
+      title: 'Motorcycle not found',
+      detail: `Motorcycle ${id} does not exist.`,
+    });
+  }
+
+  const accIds = (bike.compatibilities ?? []).map((c) => c.accessoryId);
+  const [bikeReservedMap, accessoryReservedMap] = await Promise.all([
+    getActiveReservedQtyByBikeIds(app.prisma, [bike.id]),
+    getActiveReservedQtyByAccessoryIds(app.prisma, accIds),
+  ]);
+
+  const activeReservedQty = bikeReservedMap.get(bike.id) ?? 0;
+  return {
+    ...bike,
+    activeReservedQty,
+    availableQty: computeAvailableQty(bike.stockQty, activeReservedQty),
+    compatibilities: (bike.compatibilities ?? []).map((comp) => {
+      const accReserved = accessoryReservedMap.get(comp.accessoryId) ?? 0;
+      return {
+        ...comp,
+        accessory: comp.accessory
+          ? {
+              ...comp.accessory,
+              activeReservedQty: accReserved,
+              availableQty: computeAvailableQty(comp.accessory.stockQty, accReserved),
+            }
+          : null,
+      };
+    }),
+  };
+}
+
+/**
  * Create a new motorcycle and geometry spec (ADMIN only), recording AuditLog and busting caches.
  * @param {import('fastify').FastifyInstance} app
  * @param {object} payload

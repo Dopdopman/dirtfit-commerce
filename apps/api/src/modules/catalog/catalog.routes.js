@@ -14,6 +14,7 @@ import { sendSuccess } from '../../common/http/envelope.js';
 import {
   adminCalibrateBikeMedia,
   adminCreateBike,
+  adminGetBikeById,
   adminListBikes,
   adminSoftDeleteBike,
   adminUpdateBike,
@@ -94,6 +95,23 @@ export default async function catalogRoutes(app) {
     async (request, reply) => {
       const result = await adminListBikes(app, request.query);
       return sendSuccess(reply, result.items, { pagination: result.pagination });
+    }
+  );
+
+  app.get(
+    '/admin/bikes/:id',
+    {
+      preHandler: [app.requireAuth, app.requireRoles(USER_ROLES.ADMIN, USER_ROLES.SALES_STAFF)],
+      schema: {
+        tags: ['Admin Catalog'],
+        summary: 'Get full motorcycle details by ID for Admin/Sales Portal',
+        security: [{ bearerAuth: [] }],
+        params: IdParamSchema,
+      },
+    },
+    async (request, reply) => {
+      const bike = await adminGetBikeById(app, request.params.id);
+      return sendSuccess(reply, { bike });
     }
   );
 

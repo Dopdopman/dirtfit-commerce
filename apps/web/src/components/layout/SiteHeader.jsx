@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShoppingBag, User } from 'lucide-react';
+import { ShoppingBag, ShieldCheck, User } from 'lucide-react';
+import { canAccessAdminPortal } from '@/lib/admin-helpers';
 import { useAuth, useCart } from '@/providers/AppProviders';
 
 const NAV_ITEMS = [
@@ -54,7 +55,17 @@ export default function SiteHeader() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {authReady && user && canAccessAdminPortal(user.role) && (
+            <Link
+              href="/admin"
+              className="hidden items-center gap-1.5 rounded-sm border border-signal bg-signal-soft px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-signal transition-colors hover:bg-signal hover:text-surface md:flex"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Admin Portal
+            </Link>
+          )}
+
           <Link
             href="/cart"
             className="flex items-center gap-2 rounded-sm border border-line bg-canvas px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-line-strong"

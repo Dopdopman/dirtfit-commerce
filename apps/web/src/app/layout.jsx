@@ -1,7 +1,5 @@
 import { Be_Vietnam_Pro, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
-import ColdStartNotice from '@/components/layout/ColdStartNotice';
-import SiteFooter from '@/components/layout/SiteFooter';
-import SiteHeader from '@/components/layout/SiteHeader';
+import StorefrontShell from '@/components/layout/StorefrontShell';
 import AppProviders from '@/providers/AppProviders';
 import './globals.css';
 
@@ -46,10 +44,7 @@ export default function RootLayout({ children }) {
     >
       <body className="flex min-h-screen flex-col bg-canvas text-ink">
         <AppProviders>
-          <ColdStartNotice />
-          <SiteHeader />
-          <main className="flex-1">{children}</main>
-          <SiteFooter />
+          <StorefrontShell>{children}</StorefrontShell>
         </AppProviders>
       </body>
     </html>

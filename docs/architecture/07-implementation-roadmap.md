@@ -144,9 +144,9 @@ flowchart TD
   - **Customer Flows:** `/login`, `/register`, `/cart`, `/checkout` (Idempotency-Key, PayOS/Mock/COD selector, result page), `/test-ride` (3 showrooms), `/account/*` (Body Profiles, Orders/Deposits, Test Rides).
   - **Admin Portal (`/admin/*`):** KPI Dashboard, Bike & GeometrySpec CRUD, **Admin Calibration Tool** (`/admin/bikes/[id]/calibrate` with 2.5x loupe & 175cm test rider overlay), Compatibility Matrix Manager, Order State Machine controls, Test Ride scheduler, User RBAC, and Audit Log viewer.
 - **Definition of Done (DoD):**
-  - [ ] Full E2E journey verified: enter height → filter fitting bikes → toggle -30mm lowering link in Simulator → add bundle to cart → pay deposit via Mock/Sandbox webhook → verify updated order & stock in Admin Portal.
-  - [ ] Admin calibrates a new side-profile photo in `< 60 seconds` and sees millimeter-accurate alignment on the Storefront Simulator.
-  - [ ] `/admin/*` strictly blocks `CUSTOMER` role at both UI/middleware and API layers.
+  - [x] Full E2E journey verified: enter height → filter fitting bikes → toggle -30mm lowering link in Simulator → add bundle to cart → pay deposit via Mock/Sandbox webhook → verify updated order & stock in Admin Portal.
+  - [x] Admin calibrates a new side-profile photo in `< 60 seconds` and sees millimeter-accurate alignment on the Storefront Simulator.
+  - [x] `/admin/*` strictly blocks `CUSTOMER` role at both UI/middleware and API layers.
 
 ---
 
