@@ -21,11 +21,16 @@ import {
   computeLiveCalibrationPreview,
 } from '@/lib/calibration-helpers';
 import { localizeApiError } from '@/lib/i18n/translate';
+import {
+  readBrowserImageDimensions,
+  resolveClientMediaUrl,
+  validateImageFileForUpload,
+} from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
- * Interactive 2D Blueprint Upload (3-step Presign -> PUT -> Confirm) & 6-Anchor UV Calibration Tool.
- * Includes real-time pxPerMm/perspective distortion check and live 170cm Rider SVG Overlay preview.
+ * Interactive 2D Side-Profile Blueprint Upload (locked strictly to `SIDE_PROFILE_BLUEPRINT`)
+ * & 6-Anchor UV Calibration Tool with live pxPerMm/perspective check and 170cm Rider SVG Overlay.
  * @param {object} props
  * @param {object} props.bike
  * @param {boolean} props.isAdmin
@@ -34,25 +39,38 @@ import { useI18n } from '@/providers/I18nProvider';
  */
 export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated }) {
   const { locale, t } = useI18n();
-  const mediaList = useMemo(() => bike.media ?? [], [bike.media]);
-  const [selectedMediaId, setSelectedMediaId] = useState(
+  const blueprintList = useMemo(
     () =>
-      mediaList.find((m) => m.mediaType === 'SIDE_PROFILE_BLUEPRINT' && m.isPrimary)?.id ??
-      mediaList.find((m) => m.mediaType === 'SIDE_PROFILE_BLUEPRINT')?.id ??
-      mediaList[0]?.id ??
-      ''
+      (bike.media ?? []).filter(
+        (m) => m && !m.deletedAt && m.mediaType === 'SIDE_PROFILE_BLUEPRINT'
+      ),
+    [bike.media]
   );
 
+  const [selectedMediaId, setSelectedMediaId] = useState(
+    () => blueprintList.find((m) => m.isPrimary)?.id ?? blueprintList[0]?.id ?? ''
+  );
+
+  useEffect(() => {
+    if (blueprintList.length === 0) {
+      setSelectedMediaId('');
+      return;
+    }
+    if (!blueprintList.some((m) => m.id === selectedMediaId)) {
+      setSelectedMediaId(blueprintList.find((m) => m.isPrimary)?.id ?? blueprintList[0].id);
+    }
+  }, [blueprintList, selectedMediaId]);
+
   const [localPreviewUrls, setLocalPreviewUrls] = useState({});
-  const [uploadMediaType, setUploadMediaType] = useState('SIDE_PROFILE_BLUEPRINT');
   const [uploadIsPrimary, setUploadIsPrimary] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadStatus, setUploadStatus] = useState('');
+  const [imgBroken, setImgBroken] = useState(false);
 
   const selectedMedia = useMemo(
-    () => mediaList.find((m) => m.id === selectedMediaId) ?? mediaList[0] ?? null,
-    [mediaList, selectedMediaId]
+    () => blueprintList.find((m) => m.id === selectedMediaId) ?? blueprintList[0] ?? null,
+    [blueprintList, selectedMediaId]
   );
 
   const [facing, setFacing] = useState('RIGHT');
@@ -72,6 +90,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
     if (!selectedMedia) {
       return;
     }
+    setImgBroken(false);
     const existing = selectedMedia.calibrationData;
     if (existing?.anchorsUv) {
       setFacing(existing.facing === 'LEFT' ? 'LEFT' : 'RIGHT');
@@ -113,7 +132,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
     if (localPreviewUrls[selectedMedia.id]) {
       return localPreviewUrls[selectedMedia.id];
     }
-    return selectedMedia.url || '';
+    return resolveClientMediaUrl(selectedMedia.url) || '';
   }, [selectedMedia, localPreviewUrls]);
 
   const activeStep = CALIBRATION_ANCHOR_STEPS[activeStepIdx] ?? CALIBRATION_ANCHOR_STEPS[0];
@@ -164,52 +183,45 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
     }
   };
 
-  const readImageDimensions = (file) =>
-    new Promise((resolve) => {
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        resolve({
-          objectUrl,
-          widthPx: Math.max(200, Math.min(8000, img.naturalWidth || 1200)),
-          heightPx: Math.max(200, Math.min(8000, img.naturalHeight || 800)),
-        });
-      };
-      img.onerror = () => {
-        resolve({ objectUrl, widthPx: 1200, heightPx: 800 });
-      };
-      img.src = objectUrl;
-    });
-
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !isAdmin) return;
 
+    const check = validateImageFileForUpload(file);
+    if (!check.valid) {
+      setUploadError(
+        check.errorCode === 'INVALID_TYPE'
+          ? t('media.invalidFileType')
+          : check.errorCode === 'FILE_TOO_LARGE'
+            ? t('media.fileTooLarge')
+            : t('media.emptyFile')
+      );
+      e.target.value = '';
+      return;
+    }
+
     setUploading(true);
     setUploadError('');
-    setUploadStatus(t('calibration.uploadingBtn'));
+    setUploadStatus(t('media.stepPresign'));
 
     try {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-      const declaredMime = allowedTypes.includes(file.type) ? file.type : 'image/png';
-      const dims = await readImageDimensions(file);
+      const dims = await readBrowserImageDimensions(file);
 
-      const presignRes = await apiRequest('/api/v1/admin/media/presign', {
+      const presign = await apiRequest(`/api/v1/admin/bikes/${bike.id}/media/presign`, {
         method: 'POST',
         body: {
-          bikeId: bike.id,
-          mediaType: uploadMediaType,
-          mimeType: declaredMime,
+          mediaType: 'SIDE_PROFILE_BLUEPRINT',
+          mimeType: check.mimeType,
           sizeBytes: file.size,
           originalFileName: file.name.slice(0, 180),
         },
       });
-      const presign = presignRes;
 
+      setUploadStatus(t('media.stepUpload'));
       const putRes = await fetch(presign.uploadUrl, {
         method: presign.method || 'PUT',
         headers: {
-          'content-type': declaredMime,
+          'content-type': check.mimeType,
         },
         body: file,
       });
@@ -225,18 +237,18 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
         throw new Error(detail);
       }
 
-      const confirmRes = await apiRequest('/api/v1/admin/media/confirm', {
+      setUploadStatus(t('media.stepConfirm'));
+      const confirmRes = await apiRequest(`/api/v1/admin/bikes/${bike.id}/media/confirm`, {
         method: 'POST',
         body: {
-          bikeId: bike.id,
           storageKey: presign.storageKey,
-          declaredMimeType: declaredMime,
-          mediaType: uploadMediaType,
-          altText: `${bike.name} (${uploadMediaType})`,
+          declaredMimeType: check.mimeType,
+          mediaType: 'SIDE_PROFILE_BLUEPRINT',
+          altText: `${bike.name} (SIDE_PROFILE_BLUEPRINT)`,
           widthPx: dims.widthPx,
           heightPx: dims.heightPx,
           isPrimary: uploadIsPrimary,
-          sortOrder: mediaList.length,
+          sortOrder: blueprintList.length,
         },
       });
 
@@ -247,10 +259,12 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
           [createdMedia.id]: dims.objectUrl,
         }));
         setSelectedMediaId(createdMedia.id);
+      } else {
+        URL.revokeObjectURL(dims.objectUrl);
       }
 
       setUploadStatus(
-        `${confirmRes?.verifiedMime || declaredMime} · ${dims.widthPx}x${dims.heightPx}px`
+        `${confirmRes?.verifiedMime || check.mimeType} · ${dims.widthPx}x${dims.heightPx}px`
       );
       await onBikeUpdated();
     } catch (err) {
@@ -301,7 +315,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
 
   return (
     <div className="space-y-6">
-      {/* 1. Upload Box (Presign -> PUT -> Confirm) */}
+      {/* 1. Blueprint Upload Box (Locked strictly to SIDE_PROFILE_BLUEPRINT) */}
       <div className="rounded-sm border border-line bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <div>
@@ -318,18 +332,9 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <select
-            value={uploadMediaType}
-            onChange={(e) => setUploadMediaType(e.target.value)}
-            disabled={!isAdmin || uploading}
-            className="rounded-sm border border-line bg-canvas px-3 py-2 text-xs text-ink"
-          >
-            <option value="SIDE_PROFILE_BLUEPRINT">
-              {t('calibration.mediaTypes.SIDE_PROFILE_BLUEPRINT')}
-            </option>
-            <option value="GALLERY">{t('calibration.mediaTypes.GALLERY')}</option>
-            <option value="SPEC_SHEET">{t('calibration.mediaTypes.SPEC_SHEET')}</option>
-          </select>
+          <span className="rounded-sm border border-line bg-canvas px-3 py-2 font-mono text-xs font-semibold text-ink">
+            {t('calibration.mediaTypes.SIDE_PROFILE_BLUEPRINT')}
+          </span>
 
           <label className="inline-flex items-center gap-2 text-xs text-ink">
             <input
@@ -350,7 +355,9 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
             }`}
           >
             <Upload className="h-3.5 w-3.5" />
-            {uploading ? t('calibration.uploadingBtn') : t('calibration.pickFileBtn')}
+            {uploading
+              ? uploadStatus || t('calibration.uploadingBtn')
+              : t('calibration.pickFileBtn')}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -369,8 +376,8 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
         )}
       </div>
 
-      {/* 2. Media Selector + Interactive Calibration Workbench */}
-      {mediaList.length === 0 ? (
+      {/* 2. Blueprint Selector + Interactive Calibration Workbench */}
+      {blueprintList.length === 0 ? (
         <div className="rounded-sm border border-dashed border-line-strong bg-surface p-8 text-center text-sm text-ink-secondary">
           {t('calibration.emptyMedia')}
         </div>
@@ -379,13 +386,13 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
           <div className="space-y-3 xl:col-span-8">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-ink-muted">Media:</span>
+                <span className="text-xs font-semibold text-ink-muted">Blueprint:</span>
                 <select
                   value={selectedMedia?.id || ''}
                   onChange={(e) => setSelectedMediaId(e.target.value)}
                   className="rounded-sm border border-line bg-canvas px-2.5 py-1.5 font-mono text-xs text-ink"
                 >
-                  {mediaList.map((m, idx) => (
+                  {blueprintList.map((m, idx) => (
                     <option key={m.id} value={m.id}>
                       #{idx + 1} · {m.mediaType} {m.isPrimary ? '(Primary)' : ''}{' '}
                       {m.calibrationData ? '✓' : ''}
@@ -465,19 +472,24 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
               onPointerMove={handleCanvasPointerMove}
               onPointerUp={handleCanvasPointerUp}
               onPointerLeave={handleCanvasPointerUp}
-              className="relative select-none overflow-hidden rounded-sm border border-line-strong bg-white"
+              className="cad-grid-bg relative select-none overflow-hidden rounded-sm border border-line-strong bg-white"
               style={{
                 aspectRatio: `${imageDims.widthPx} / ${imageDims.heightPx}`,
                 cursor: isAdmin ? 'crosshair' : 'default',
               }}
             >
-              {resolvedImageSrc && (
+              {resolvedImageSrc && !imgBroken ? (
                 <img
                   src={resolvedImageSrc}
                   alt={selectedMedia?.altText || bike.name}
                   draggable={false}
+                  onError={() => setImgBroken(true)}
                   className="h-full w-full object-fill"
                 />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center p-4 text-center font-mono text-[11px] text-ink-muted">
+                  2D UV Calibration Canvas ({selectedMedia?.mediaType || 'SIDE_PROFILE_BLUEPRINT'})
+                </div>
               )}
 
               <svg

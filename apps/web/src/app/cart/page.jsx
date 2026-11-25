@@ -1,13 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Minus, Plus, Trash2 } from 'lucide-react';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { formatVnd } from '@/lib/formatters';
+import { resolveItemProductUrl } from '@/lib/media-helpers';
 import { useCart } from '@/providers/AppProviders';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
- * Shopping Cart page separating bike deposits, installation labor, and COD eligibility.
+ * Shopping Cart page separating bike deposits, installation labor, COD eligibility,
+ * clickable thumbnails, and product deep-links (`/bikes/[slug]`, `/accessories?sku=...`).
  * @returns {import('react').JSX.Element}
  */
 export default function CartPage() {
@@ -74,82 +77,131 @@ export default function CartPage() {
       ) : (
         <div className="grid gap-8 lg:grid-cols-12">
           <div className="space-y-4 lg:col-span-8">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col justify-between gap-4 border border-line bg-surface p-5 sm:flex-row sm:items-center"
-              >
-                <div>
-                  <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-                    <span
-                      className={item.itemType === 'BIKE' ? 'text-signal' : 'text-ink-secondary'}
-                    >
-                      {item.itemType === 'BIKE'
-                        ? t('cart.itemTypeBike')
-                        : t('cart.itemTypeAccessory')}
-                    </span>
-                    {item.bundleGroupId && (
-                      <span className="rounded-sm border border-signal/30 bg-orange-50 px-1.5 py-0.5 text-[10px] text-signal">
-                        COMBO SIMULATOR
+            {items.map((item) => {
+              const productUrl = resolveItemProductUrl(item);
+              const imageUrl = item.imageUrl ?? item.product?.imageUrl ?? null;
+              const sku = item.sku ?? item.product?.sku ?? null;
+              const brandLabel = item.brandName ?? item.brand ?? item.product?.brandName ?? null;
+              const displayName = item.product?.name ?? item.itemType;
+
+              return (
+                <div
+                  key={item.id}
+                  className="flex flex-col justify-between gap-4 border border-line bg-surface p-5 sm:flex-row sm:items-center"
+                >
+                  <div className="flex items-start gap-4">
+                    <ProductThumbnail
+                      itemType={item.itemType}
+                      size="md"
+                      src={imageUrl}
+                      alt={displayName}
+                      sku={sku}
+                      href={productUrl}
+                    />
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">
+                        <span
+                          className={
+                            item.itemType === 'BIKE' ? 'text-signal' : 'text-ink-secondary'
+                          }
+                        >
+                          {item.itemType === 'BIKE'
+                            ? t('cart.itemTypeBike')
+                            : t('cart.itemTypeAccessory')}
+                        </span>
+                        {item.bundleGroupId && (
+                          <span className="rounded-sm border border-signal/30 bg-orange-50 px-1.5 py-0.5 text-[10px] text-signal">
+                            COMBO SIMULATOR
+                          </span>
+                        )}
+                      </div>
+
+                      <h2 className="mt-1 font-display text-lg font-bold text-ink">
+                        <Link href={productUrl} className="hover:text-signal hover:underline">
+                          {displayName}
+                        </Link>
+                      </h2>
+
+                      {(brandLabel || sku) && (
+                        <div className="mt-0.5 font-mono text-[11px] text-ink-muted">
+                          {[brandLabel, sku].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+
+                      <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
+                        {t('cart.unitPrice')}: {formatVnd(item.unitPriceVnd, locale)}
+                        {item.installLaborVnd > 0 &&
+                          ` · +${formatVnd(item.installLaborVnd, locale)}`}
+                        {item.itemType === 'BIKE' &&
+                          ` · ${t('bikeDetail.depositLabel', { amount: formatVnd(item.depositAmountVnd, locale) })}`}
+                      </div>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
+                        <span className="text-ink-muted tabular-telemetry">
+                          {item.inStock
+                            ? t('cart.availableHint', { avail: item.availableQty })
+                            : t('cart.stockWarning', {
+                                avail: item.availableQty,
+                                qty: item.quantity,
+                              })}
+                        </span>
+                        <Link
+                          href={productUrl}
+                          className="inline-flex items-center gap-0.5 font-semibold text-signal hover:underline"
+                        >
+                          <span>
+                            {item.itemType === 'BIKE'
+                              ? t('cart.viewBike')
+                              : t('cart.viewAccessory')}
+                          </span>
+                          <ArrowUpRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center border border-line bg-canvas">
+                      <button
+                        type="button"
+                        aria-label="-"
+                        disabled={item.quantity <= 1}
+                        onClick={() => updateItemQty(item.id, item.quantity - 1)}
+                        className="p-2 text-ink-secondary hover:text-ink disabled:opacity-40"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-semibold tabular-telemetry">
+                        {item.quantity}
                       </span>
-                    )}
-                  </div>
-                  <h2 className="mt-1 font-display text-lg font-bold text-ink">
-                    {item.product?.name ?? item.itemType}
-                  </h2>
-                  <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                    {t('cart.unitPrice')}: {formatVnd(item.unitPriceVnd, locale)}
-                    {item.installLaborVnd > 0 && ` · +${formatVnd(item.installLaborVnd, locale)}`}
-                    {item.itemType === 'BIKE' &&
-                      ` · ${t('bikeDetail.depositLabel', { amount: formatVnd(item.depositAmountVnd, locale) })}`}
-                  </div>
-                  <div className="mt-1 text-[11px] text-ink-muted tabular-telemetry">
-                    {item.inStock
-                      ? t('cart.availableHint', { avail: item.availableQty })
-                      : t('cart.stockWarning', { avail: item.availableQty, qty: item.quantity })}
-                  </div>
-                </div>
+                      <button
+                        type="button"
+                        aria-label="+"
+                        disabled={item.quantity >= item.availableQty}
+                        onClick={() => updateItemQty(item.id, item.quantity + 1)}
+                        className="p-2 text-ink-secondary hover:text-ink disabled:opacity-40"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center border border-line bg-canvas">
+                    <div className="w-36 text-right font-bold text-ink tabular-telemetry">
+                      {formatVnd(item.lineTotalVnd, locale)}
+                    </div>
+
                     <button
                       type="button"
-                      aria-label="-"
-                      disabled={item.quantity <= 1}
-                      onClick={() => updateItemQty(item.id, item.quantity - 1)}
-                      className="p-2 text-ink-secondary hover:text-ink disabled:opacity-40"
+                      aria-label={t('common.delete')}
+                      onClick={() => removeItem(item.id)}
+                      className="p-1.5 text-ink-muted hover:text-fit-unsafe"
                     >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="w-8 text-center text-sm font-semibold tabular-telemetry">
-                      {item.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="+"
-                      disabled={item.quantity >= item.availableQty}
-                      onClick={() => updateItemQty(item.id, item.quantity + 1)}
-                      className="p-2 text-ink-secondary hover:text-ink disabled:opacity-40"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-
-                  <div className="w-36 text-right font-bold text-ink tabular-telemetry">
-                    {formatVnd(item.lineTotalVnd, locale)}
-                  </div>
-
-                  <button
-                    type="button"
-                    aria-label={t('common.delete')}
-                    onClick={() => removeItem(item.id)}
-                    className="p-1.5 text-ink-muted hover:text-fit-unsafe"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Summary Panel */}

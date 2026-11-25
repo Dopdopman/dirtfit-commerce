@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { buildParametricWireframe, worldToSvg } from '@dirtfit/ergonomics-engine';
 import ParametricBikeSvg from '@/components/simulator/ParametricBikeSvg';
 import { formatVnd, getCategoryLabel, getFitStatusMeta } from '@/lib/formatters';
+import { getBikeCardMedia } from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
 const CARD_VIEWPORT = Object.freeze({
@@ -14,15 +16,24 @@ const CARD_VIEWPORT = Object.freeze({
 
 /**
  * Clean 5-element Industrial Motorsport motorcycle catalog card.
+ * Displays real cover photo when live, or falls back smoothly to 2D Parametric Wireframe SVG.
  * @param {object} props
  * @param {object} props.bike
  * @returns {import('react').JSX.Element}
  */
 export default function BikeCard({ bike }) {
   const { locale, t } = useI18n();
+  const { coverUrl, hasRealPhoto } = getBikeCardMedia(bike);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [coverUrl]);
+
+  const showRealPhoto = Boolean(hasRealPhoto && coverUrl && !imgFailed);
 
   let svgWireframe = null;
-  if (bike.geometrySpec) {
+  if (!showRealPhoto && bike.geometrySpec) {
     const wireframeMm = buildParametricWireframe(bike.geometrySpec);
     const projectPt = (pt) => worldToSvg(pt, CARD_VIEWPORT);
     const scaleLen = (mm) => Math.round(mm * CARD_VIEWPORT.pxPerMm * 10) / 10;
@@ -54,25 +65,39 @@ export default function BikeCard({ bike }) {
       href={`/bikes/${bike.slug}`}
       className="group flex flex-col border border-line bg-surface transition-colors hover:border-line-strong"
     >
-      {/* Element 1: Clean Side-Profile CAD Drafting Preview + Optional Single Fit Badge */}
-      <div className="relative h-44 w-full overflow-hidden border-b border-line cad-grid-bg">
-        {svgWireframe && (
-          <svg
-            viewBox="0 0 340 165"
-            className="h-full w-full"
-            aria-label={`${bike.name} side blueprint`}
-          >
-            <line
-              x1="12"
-              y1={CARD_VIEWPORT.originSvgY}
-              x2="328"
-              y2={CARD_VIEWPORT.originSvgY}
-              stroke="#1C1E21"
-              strokeOpacity="0.25"
-              strokeWidth="1"
-            />
-            <ParametricBikeSvg svgWireframe={svgWireframe} />
-          </svg>
+      {/* Element 1: Real Cover Photo or Clean 2D Side-Profile CAD Drafting Preview */}
+      <div
+        className={`relative aspect-[16/10] w-full overflow-hidden border-b border-line ${
+          showRealPhoto ? 'bg-canvas' : 'cad-grid-bg'
+        }`}
+      >
+        {showRealPhoto ? (
+          <img
+            src={coverUrl}
+            alt={bike.name}
+            loading="lazy"
+            onError={() => setImgFailed(true)}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          svgWireframe && (
+            <svg
+              viewBox="0 0 340 165"
+              className="h-full w-full"
+              aria-label={`${bike.name} side blueprint`}
+            >
+              <line
+                x1="12"
+                y1={CARD_VIEWPORT.originSvgY}
+                x2="328"
+                y2={CARD_VIEWPORT.originSvgY}
+                stroke="#1C1E21"
+                strokeOpacity="0.25"
+                strokeWidth="1"
+              />
+              <ParametricBikeSvg svgWireframe={svgWireframe} />
+            </svg>
+          )
         )}
 
         {fitMeta && (
@@ -90,6 +115,10 @@ export default function BikeCard({ bike }) {
             )}
           </div>
         )}
+
+        <div className="absolute bottom-2 right-2 rounded-sm border border-line-strong bg-surface/90 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-ink-secondary">
+          {showRealPhoto ? t('media.fitReadyBadge') : t('media.specPreviewBadge')}
+        </div>
       </div>
 
       {/* Elements 2–5: Brand & Title, Category, 3 Monospace Metrics, VND Price */}

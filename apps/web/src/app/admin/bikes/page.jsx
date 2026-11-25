@@ -5,6 +5,7 @@ import Link from 'next/link';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Edit3, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { BIKE_CATEGORIES, PRODUCT_STATUSES, RIDING_FOCUSES, USER_ROLES } from '@dirtfit/shared';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { canAccessAdminOnlyFeature } from '@/lib/admin-helpers';
 import { apiRequest } from '@/lib/api-client';
 import { formatVnd, getCategoryLabel } from '@/lib/formatters';
@@ -279,10 +280,21 @@ export default function AdminBikesPage() {
               bikes.map((bike) => (
                 <tr key={bike.id} className="hover:bg-canvas/50">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-ink">{bike.name}</p>
-                    <p className="font-mono text-[11px] text-ink-muted">
-                      {bike.sku} · {bike.brand?.name} · {bike.modelYear}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <ProductThumbnail
+                        itemType="BIKE"
+                        size="sm"
+                        src={bike.coverImageUrl}
+                        alt={bike.name}
+                        sku={bike.sku}
+                      />
+                      <div>
+                        <p className="font-semibold text-ink">{bike.name}</p>
+                        <p className="font-mono text-[11px] text-ink-muted">
+                          {bike.sku} · {bike.brand?.name} · {bike.modelYear}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-ink-secondary">
                     {getCategoryLabel(bike.category, locale)}

@@ -12,6 +12,7 @@ import {
   RIDING_FOCUSES,
   SEAT_FOAM_FIRMNESS,
 } from '@dirtfit/shared';
+import BikePhotoManager from '@/components/admin/BikePhotoManager';
 import BlueprintCalibrationTool from '@/components/admin/BlueprintCalibrationTool';
 import { canAccessAdminOnlyFeature } from '@/lib/admin-helpers';
 import { apiRequest } from '@/lib/api-client';
@@ -606,8 +607,9 @@ export default function AdminBikeDetailPage() {
           )}
         </Tabs.Content>
 
-        {/* Tab 3: Blueprint Calibration Tool */}
-        <Tabs.Content value="calibration">
+        {/* Tab 3: Real Product Photos + 2D Blueprint Calibration Tool */}
+        <Tabs.Content value="calibration" className="space-y-6">
+          <BikePhotoManager bike={bike} isAdmin={isAdmin} onBikeUpdated={loadData} />
           <BlueprintCalibrationTool bike={bike} isAdmin={isAdmin} onBikeUpdated={loadData} />
         </Tabs.Content>
 

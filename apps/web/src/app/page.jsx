@@ -17,7 +17,7 @@ const TERRAIN_KEYS = ['OFF_ROAD', 'ON_OFF_MIXED', 'ON_ROAD_ADV'];
 export default async function HomePage() {
   const [locale, bikesRes] = await Promise.all([
     getServerLocale(),
-    fetchServerApi('/api/v1/bikes?limit=6', { revalidate: 60 }),
+    fetchServerApi('/api/v1/bikes?limit=6', { revalidate: 0 }),
   ]);
   const dict = getDictionary(locale);
   const featuredBikes = bikesRes?.data ?? [];

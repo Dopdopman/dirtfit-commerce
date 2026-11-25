@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Edit3, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ACCESSORY_CATEGORIES, PRODUCT_STATUSES } from '@dirtfit/shared';
+import AccessoryPhotoUploader, {
+  uploadAccessoryPhotoFile,
+} from '@/components/admin/AccessoryPhotoUploader';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { buildAccessoryErgoImpactFromForm, canAccessAdminOnlyFeature } from '@/lib/admin-helpers';
 import { apiRequest } from '@/lib/api-client';
 import { formatVnd } from '@/lib/formatters';
@@ -28,7 +32,7 @@ const INITIAL_ACC_FORM = {
 };
 
 /**
- * Admin Accessories CRUD & Ergonomic Impact Configuration page (`/admin/accessories`).
+ * Admin Accessories CRUD, Ergonomic Impact Configuration & Product Photo Upload page (`/admin/accessories`).
  * @returns {import('react').JSX.Element}
  */
 export default function AdminAccessoriesPage() {
@@ -43,6 +47,9 @@ export default function AdminAccessoriesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState(INITIAL_ACC_FORM);
+  const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
+  const [photoStepText, setPhotoStepText] = useState('');
+  const [photoUploadError, setPhotoUploadError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -71,6 +78,9 @@ export default function AdminAccessoriesPage() {
   const openCreateModal = () => {
     setEditingItem(null);
     setForm(INITIAL_ACC_FORM);
+    setPendingPhotoFile(null);
+    setPhotoStepText('');
+    setPhotoUploadError('');
     setModalOpen(true);
   };
 
@@ -92,7 +102,17 @@ export default function AdminAccessoriesPage() {
       barRiserMm: ergo.barRiserMm ?? '',
       pegLowerMm: ergo.pegLowerMm ?? '',
     });
+    setPendingPhotoFile(null);
+    setPhotoStepText('');
+    setPhotoUploadError('');
     setModalOpen(true);
+  };
+
+  const handlePhotoMutated = async (updatedAccessory) => {
+    setEditingItem(updatedAccessory);
+    setPendingPhotoFile(null);
+    setPhotoUploadError('');
+    await loadAccessories();
   };
 
   const handleSubmit = async (e) => {
@@ -100,6 +120,7 @@ export default function AdminAccessoriesPage() {
     setSubmitting(true);
     setError('');
     setFeedback('');
+    setPhotoUploadError('');
 
     try {
       const ergoImpactJson = buildAccessoryErgoImpactFromForm(form);
@@ -126,24 +147,52 @@ export default function AdminAccessoriesPage() {
           body,
         });
         setFeedback(t('common.save'));
-      } else {
-        await apiRequest('/api/v1/admin/accessories', {
-          method: 'POST',
-          body: {
-            sku: form.sku.trim(),
-            name: form.name.trim(),
-            slug: form.slug.trim(),
-            category: form.category,
-            brandName: form.brandName.trim() || null,
-            priceVnd: Number(form.priceVnd),
-            stockQty: Number(form.stockQty),
-            status: form.status,
-            ergoImpactJson,
-          },
-        });
-        setFeedback(form.name.trim());
+        setModalOpen(false);
+        await loadAccessories();
+        return;
       }
 
+      const createdRes = await apiRequest('/api/v1/admin/accessories', {
+        method: 'POST',
+        body: {
+          sku: form.sku.trim(),
+          name: form.name.trim(),
+          slug: form.slug.trim(),
+          category: form.category,
+          brandName: form.brandName.trim() || null,
+          priceVnd: Number(form.priceVnd),
+          stockQty: Number(form.stockQty),
+          status: form.status,
+          ergoImpactJson,
+        },
+      });
+
+      const createdAcc = createdRes?.accessory;
+
+      if (pendingPhotoFile && createdAcc?.id) {
+        try {
+          await uploadAccessoryPhotoFile(createdAcc.id, pendingPhotoFile, {
+            onStep: (stepKey) => setPhotoStepText(t(`media.${stepKey}`)),
+          });
+          setPhotoStepText('');
+          setPendingPhotoFile(null);
+          setFeedback(form.name.trim());
+          setModalOpen(false);
+          await loadAccessories();
+        } catch (photoErr) {
+          setPhotoStepText('');
+          // Transition modal to Edit mode of the created accessory so retry never duplicates SKU
+          setEditingItem(createdAcc);
+          setPendingPhotoFile(null);
+          setPhotoUploadError(
+            `${t('adminAccessories.createdPhotoRetryError')} (${localizeApiError(photoErr, locale)})`
+          );
+          await loadAccessories();
+        }
+        return;
+      }
+
+      setFeedback(form.name.trim());
       setModalOpen(false);
       await loadAccessories();
     } catch (err) {
@@ -252,6 +301,7 @@ export default function AdminAccessoriesPage() {
         <table className="w-full text-left text-xs">
           <thead className="border-b border-line bg-canvas text-[11px] uppercase tracking-wider text-ink-muted">
             <tr>
+              <th className="px-4 py-3">{t('adminAccessories.colPhoto')}</th>
               <th className="px-4 py-3">{t('adminAccessories.colSkuName')}</th>
               <th className="px-4 py-3">{t('adminAccessories.colType')}</th>
               <th className="px-4 py-3">{t('adminAccessories.colErgo')}</th>
@@ -264,13 +314,22 @@ export default function AdminAccessoriesPage() {
           <tbody className="divide-y divide-line">
             {items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-ink-muted">
+                <td colSpan={8} className="px-4 py-8 text-center text-ink-muted">
                   {loading ? t('common.loading') : t('adminAccessories.empty')}
                 </td>
               </tr>
             ) : (
               items.map((acc) => (
                 <tr key={acc.id} className="hover:bg-canvas/50">
+                  <td className="px-4 py-3">
+                    <ProductThumbnail
+                      itemType="ACCESSORY"
+                      size="sm"
+                      src={acc.imageUrl}
+                      alt={acc.name}
+                      sku={acc.sku}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <p className="font-semibold text-ink">{acc.name}</p>
                     <p className="font-mono text-[11px] text-ink-muted">
@@ -325,7 +384,17 @@ export default function AdminAccessoriesPage() {
       </div>
 
       {/* Create / Edit Modal */}
-      <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog.Root
+        open={modalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open) {
+            setPendingPhotoFile(null);
+            setPhotoStepText('');
+            setPhotoUploadError('');
+          }
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[95vw] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-sm border border-line bg-surface p-6 shadow-xl">
@@ -343,6 +412,16 @@ export default function AdminAccessoriesPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-xs">
+              <AccessoryPhotoUploader
+                accessory={editingItem}
+                isAdmin={isAdmin}
+                pendingFile={pendingPhotoFile}
+                onPendingFileChange={setPendingPhotoFile}
+                onPhotoMutated={handlePhotoMutated}
+                externalStepText={photoStepText}
+                externalError={photoUploadError}
+              />
+
               <div className="grid gap-3 sm:grid-cols-2">
                 {!editingItem && (
                   <>

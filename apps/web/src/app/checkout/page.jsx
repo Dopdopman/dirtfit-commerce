@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Lock, ShieldAlert } from 'lucide-react';
 import { ShippingAddressSchema } from '@dirtfit/shared';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { apiRequest } from '@/lib/api-client';
 import { formatVnd, getOrderStatusMeta } from '@/lib/formatters';
 import { localizeApiError } from '@/lib/i18n/translate';
+import { resolveItemProductUrl } from '@/lib/media-helpers';
 import { useAuth, useCart, useRiderProfile } from '@/providers/AppProviders';
 import { useI18n } from '@/providers/I18nProvider';
 
@@ -442,6 +444,57 @@ export default function CheckoutPage() {
             <h2 className="font-display text-lg font-bold text-ink">
               {t('checkout.summaryTitle')}
             </h2>
+
+            {/* Compact Order Item Preview (No <input> inside <aside> to preserve form selectors) */}
+            <div className="mt-4 space-y-2 border-t border-line pt-3">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-ink-muted">
+                {t('checkout.orderItemsHeading')} ({cart.items.length})
+              </div>
+              <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+                {cart.items.map((item) => {
+                  const productUrl = resolveItemProductUrl(item);
+                  const displayName = item.product?.name ?? item.itemType;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-2.5 rounded-sm border border-line bg-canvas p-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <ProductThumbnail
+                          itemType={item.itemType}
+                          size="xs"
+                          src={item.imageUrl ?? item.product?.imageUrl ?? null}
+                          alt={displayName}
+                          sku={item.sku ?? item.product?.sku ?? null}
+                          href={productUrl}
+                          openInNewTab
+                        />
+                        <div className="min-w-0">
+                          <Link
+                            href={productUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block truncate text-xs font-semibold text-ink hover:text-signal hover:underline"
+                          >
+                            {displayName}
+                          </Link>
+                          <div className="font-mono text-[10px] text-ink-muted tabular-telemetry">
+                            x{item.quantity}
+                            {(item.sku ?? item.product?.sku)
+                              ? ` · ${item.sku ?? item.product?.sku}`
+                              : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="shrink-0 font-mono text-xs font-bold text-ink tabular-telemetry">
+                        {formatVnd(item.lineTotalVnd, locale)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <dl className="mt-4 space-y-2 border-y border-line py-4 text-sm">
               <div className="flex justify-between">
                 <dt className="text-ink-secondary">{t('cart.summaryTitle')}</dt>

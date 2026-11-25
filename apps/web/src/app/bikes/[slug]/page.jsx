@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function generateMetadata({ params }) {
   const [{ slug }, locale] = await Promise.all([params, getServerLocale()]);
-  const res = await fetchServerApi(`/api/v1/bikes/${slug}`, { revalidate: 30 });
+  const res = await fetchServerApi(`/api/v1/bikes/${slug}`, { revalidate: 0 });
   const bike = res?.data?.bike;
   const dict = getDictionary(locale);
   if (!bike) {
@@ -34,7 +34,7 @@ export async function generateMetadata({ params }) {
  */
 export default async function BikeDetailPage({ params }) {
   const { slug } = await params;
-  const res = await fetchServerApi(`/api/v1/bikes/${slug}`, { revalidate: 30 });
+  const res = await fetchServerApi(`/api/v1/bikes/${slug}`, { revalidate: 0 });
   const bike = res?.data?.bike;
 
   if (!bike) {

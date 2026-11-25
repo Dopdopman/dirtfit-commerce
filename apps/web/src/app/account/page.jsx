@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SetPasswordSchema } from '@dirtfit/shared';
 import * as Tabs from '@radix-ui/react-tabs';
 import { CheckCircle2, KeyRound, LogOut, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { apiRequest } from '@/lib/api-client';
 import {
   formatVnd,
@@ -14,6 +15,7 @@ import {
   getTestRideStatusMeta,
 } from '@/lib/formatters';
 import { localizeApiError } from '@/lib/i18n/translate';
+import { resolveItemProductUrl } from '@/lib/media-helpers';
 import { useAuth, useRiderProfile } from '@/providers/AppProviders';
 import { useI18n } from '@/providers/I18nProvider';
 
@@ -397,37 +399,76 @@ export default function AccountPage() {
             orders.map((order) => {
               const st = getOrderStatusMeta(order.status, locale);
               return (
-                <div
-                  key={order.id}
-                  className="flex flex-wrap items-center justify-between gap-4 border border-line bg-canvas p-4"
-                >
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-bold text-ink tabular-telemetry">
-                        {order.orderNumber}
-                      </span>
-                      <span
-                        className={`rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${st.className}`}
+                <div key={order.id} className="space-y-3 border border-line bg-canvas p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-ink tabular-telemetry">
+                          {order.orderNumber}
+                        </span>
+                        <span
+                          className={`rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${st.className}`}
+                        >
+                          {st.label}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
+                        {t('checkout.totalOrderValue')}: {formatVnd(order.totalVnd, locale)} ·{' '}
+                        {t('checkout.payableNow')}: {formatVnd(order.paidAmountVnd, locale)} ·{' '}
+                        {t('checkout.remainingBalance')}:{' '}
+                        {formatVnd(order.remainingBalanceVnd, locale)}
+                      </div>
+                    </div>
+
+                    {order.status === 'PENDING_PAYMENT' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelOrder(order.id)}
+                        className="rounded-sm border border-fit-unsafe/50 bg-surface px-3 py-1.5 text-xs font-semibold text-fit-unsafe hover:bg-red-50"
                       >
-                        {st.label}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs text-ink-secondary tabular-telemetry">
-                      {t('checkout.totalOrderValue')}: {formatVnd(order.totalVnd, locale)} ·{' '}
-                      {t('checkout.payableNow')}: {formatVnd(order.paidAmountVnd, locale)} ·{' '}
-                      {t('checkout.remainingBalance')}:{' '}
-                      {formatVnd(order.remainingBalanceVnd, locale)}
-                    </div>
+                        {t('account.cancelOrderBtn')}
+                      </button>
+                    )}
                   </div>
 
-                  {order.status === 'PENDING_PAYMENT' && (
-                    <button
-                      type="button"
-                      onClick={() => handleCancelOrder(order.id)}
-                      className="rounded-sm border border-fit-unsafe/50 bg-surface px-3 py-1.5 text-xs font-semibold text-fit-unsafe hover:bg-red-50"
-                    >
-                      {t('account.cancelOrderBtn')}
-                    </button>
+                  {Array.isArray(order.items) && order.items.length > 0 && (
+                    <div className="divide-y divide-line border-t border-line pt-2">
+                      {order.items.map((item) => {
+                        const productUrl = resolveItemProductUrl(item);
+                        const itemName = item.productNameSnapshot || item.itemType;
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between gap-3 py-2 text-xs"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <ProductThumbnail
+                                itemType={item.itemType}
+                                size="xs"
+                                src={item.imageUrl}
+                                alt={itemName}
+                                sku={item.skuSnapshot}
+                                href={productUrl}
+                              />
+                              <div className="min-w-0">
+                                <Link
+                                  href={productUrl}
+                                  className="block truncate font-semibold text-ink hover:text-signal hover:underline"
+                                >
+                                  {itemName}
+                                </Link>
+                                <div className="font-mono text-[10px] text-ink-muted tabular-telemetry">
+                                  {item.skuSnapshot ? `${item.skuSnapshot} · ` : ''}x{item.quantity}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="shrink-0 font-mono font-semibold text-ink tabular-telemetry">
+                              {formatVnd(item.lineTotalVnd, locale)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );

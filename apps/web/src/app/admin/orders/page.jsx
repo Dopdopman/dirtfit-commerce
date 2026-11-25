@@ -1,13 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowRight, Eye, RefreshCw, X } from 'lucide-react';
 import { ORDER_STATUSES } from '@dirtfit/shared';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { getAllowedNextOrderStatuses } from '@/lib/admin-helpers';
 import { apiRequest } from '@/lib/api-client';
 import { formatDateTime, formatVnd, getOrderStatusMeta } from '@/lib/formatters';
 import { localizeApiError } from '@/lib/i18n/translate';
+import { resolveItemProductUrl } from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
@@ -251,19 +254,47 @@ export default function AdminOrdersPage() {
                     {t('adminOrders.itemsHeading', { count: selectedOrder.items?.length ?? 0 })}
                   </h3>
                   <div className="divide-y divide-line rounded-sm border border-line bg-canvas">
-                    {(selectedOrder.items ?? []).map((item) => (
-                      <div key={item.id} className="flex items-center justify-between px-3 py-2.5">
-                        <div>
-                          <p className="font-semibold text-ink">{item.itemNameSnapshot}</p>
-                          <p className="font-mono text-[11px] text-ink-muted">
-                            {item.itemType} · x{item.quantity}
-                          </p>
+                    {(selectedOrder.items ?? []).map((item) => {
+                      const productUrl = resolveItemProductUrl(item);
+                      const itemName =
+                        item.productNameSnapshot || item.itemNameSnapshot || item.itemType;
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5"
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <ProductThumbnail
+                              itemType={item.itemType}
+                              size="xs"
+                              src={item.imageUrl}
+                              alt={itemName}
+                              sku={item.skuSnapshot}
+                              href={productUrl}
+                              openInNewTab
+                            />
+                            <div className="min-w-0">
+                              <Link
+                                href={productUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block truncate font-semibold text-ink hover:text-signal hover:underline"
+                              >
+                                {itemName}
+                              </Link>
+                              <p className="font-mono text-[11px] text-ink-muted">
+                                {item.itemType}
+                                {item.skuSnapshot ? ` · ${item.skuSnapshot}` : ''} · x
+                                {item.quantity}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 font-mono font-bold text-ink tabular-telemetry">
+                            {formatVnd(item.lineTotalVnd, locale)}
+                          </span>
                         </div>
-                        <span className="font-mono font-bold text-ink tabular-telemetry">
-                          {formatVnd(item.lineTotalVnd, locale)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
 

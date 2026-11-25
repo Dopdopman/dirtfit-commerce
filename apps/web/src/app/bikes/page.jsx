@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function BikesPage() {
   const [locale, bikesRes, brandsRes] = await Promise.all([
     getServerLocale(),
-    fetchServerApi('/api/v1/bikes?limit=24', { revalidate: 30 }),
+    fetchServerApi('/api/v1/bikes?limit=24', { revalidate: 0 }),
     fetchServerApi('/api/v1/brands', { revalidate: 300 }),
   ]);
 

@@ -91,10 +91,10 @@ flowchart TD
      - Đồng bộ 100% key từ điển mới trên cả `apps/web/src/lib/i18n/en.js` và `apps/web/src/lib/i18n/vi.js`.
      - Cập nhật `apps/web/next.config.mjs` (bổ sung `remotePatterns` ghi nhận nguồn ảnh R2/local nếu cần, giữ `unoptimized: true`).
 - **Definition of Done (DoD) — Phase 13B:**
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
-  - [ ] `pnpm test:unit` pass 100% (bao gồm `apps/web/tests/i18n.test.js` xác nhận 0 thiếu key EN/VI).
-  - [ ] `pnpm --filter @dirtfit/web build` biên dịch production sạch lỗi (0 warning breaking).
-  - [ ] Toàn bộ 6 Playwright specs hiện hữu (`01`–`06`) vẫn pass 100% không bị regression.
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
+  - [x] `pnpm test:unit` pass 100% (bao gồm `apps/web/tests/i18n.test.js` xác nhận 0 thiếu key EN/VI).
+  - [x] `pnpm --filter @dirtfit/web build` biên dịch production sạch lỗi (0 warning breaking).
+  - [x] Toàn bộ 6 Playwright specs hiện hữu (`01`–`06`) vẫn pass 100% không bị regression.
 
 ---
 
