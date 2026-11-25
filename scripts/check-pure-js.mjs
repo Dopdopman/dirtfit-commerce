@@ -14,6 +14,8 @@ const IGNORED_DIRS = new Set([
   'dist',
   'coverage',
   'out',
+  'playwright-report',
+  'test-results',
 ]);
 
 const FORBIDDEN_FILE_PATTERNS = [/\.(ts|tsx|mts|cts)$/i, /^tsconfig(\..+)?\.json$/i];

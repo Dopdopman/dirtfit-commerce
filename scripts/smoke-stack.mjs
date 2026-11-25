@@ -84,21 +84,84 @@ async function main() {
     `Expected numeric priceVnd, got ${typeof firstBike.priceVnd}`
   );
 
-  // 3. Production safety gate: mock payment completion must be unmounted (404)
-  if (expectProd) {
-    const mockRes = await fetch(`${apiUrl}/api/v1/payments/mock/complete`, {
+  // 3. Live Chatbot Grounded API & OAuth providers endpoint
+  const [providersRes, chatRes] = await Promise.all([
+    fetch(`${apiUrl}/api/v1/auth/providers`),
+    fetch(`${apiUrl}/api/v1/chat/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ orderNumber: 'DF-SMOKE-0001' }),
-    });
+      body: JSON.stringify({
+        message: 'How do bike deposits and COD rules work?',
+        locale: 'en',
+      }),
+    }),
+  ]);
+  assert(
+    providersRes.status === 200,
+    `/api/v1/auth/providers expected 200, got ${providersRes.status}`
+  );
+  assert(
+    chatRes.status === 200 || chatRes.status === 201,
+    `/api/v1/chat/messages expected 200/201, got ${chatRes.status}`
+  );
+  const chatJson = await chatRes.json();
+  const assistantMsg = chatJson.data?.assistantMessage;
+  assert(
+    typeof assistantMsg?.content === 'string' && assistantMsg.content.length > 20,
+    'Expected non-empty chatbot assistantMessage.content'
+  );
+  assert(
+    Array.isArray(assistantMsg?.citations) &&
+      assistantMsg.citations.some(
+        (c) => typeof c.url === 'string' && c.url.startsWith('/policies/')
+      ),
+    'Expected chatbot response to include grounded /policies/* citation'
+  );
+
+  // Clean up ephemeral smoke guest chat session cleanly
+  const setCookieHeader = chatRes.headers.get('set-cookie');
+  if (setCookieHeader) {
+    await fetch(`${apiUrl}/api/v1/chat/session`, {
+      method: 'DELETE',
+      headers: { cookie: setCookieHeader.split(';')[0] },
+    }).catch(() => {});
+  }
+
+  // 4. Production safety gates: mock payment AND mock OAuth must be unmounted (404)
+  if (expectProd) {
+    const [mockPayRes, mockOAuthRes] = await Promise.all([
+      fetch(`${apiUrl}/api/v1/payments/mock/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ orderNumber: 'DF-SMOKE-0001' }),
+      }),
+      fetch(
+        `${apiUrl}/api/v1/auth/google/mock-authorize?state=smoke&nonce=smoke&code_challenge=smoke`,
+        { redirect: 'manual' }
+      ),
+    ]);
     assert(
-      mockRes.status === 404,
-      `Expected /api/v1/payments/mock/complete to return 404 in production, got ${mockRes.status}`
+      mockPayRes.status === 404,
+      `Expected /api/v1/payments/mock/complete to return 404 in production, got ${mockPayRes.status}`
+    );
+    assert(
+      mockOAuthRes.status === 404,
+      `Expected /api/v1/auth/google/mock-authorize to return 404 in production, got ${mockOAuthRes.status}`
     );
   }
 
-  // 4. Web SSR routes + verify live bike data from API renders on Storefront HTML
-  const routes = ['/', '/bikes', `/bikes/${firstBike.slug}`, '/compare', '/accessories', '/admin'];
+  // 5. Web SSR routes + Policy Docs + verify live bike data from API renders on Storefront HTML
+  const routes = [
+    '/',
+    '/bikes',
+    `/bikes/${firstBike.slug}`,
+    '/compare',
+    '/accessories',
+    '/policies/ordering',
+    '/policies/terms',
+    '/policies/warranty',
+    '/admin',
+  ];
   const routeChecks = [];
   for (const route of routes) {
     const res = await fetch(`${webUrl}${route}`);
@@ -109,6 +172,12 @@ async function main() {
       assert(
         html.includes(firstBike.name),
         `Web ${route} SSR HTML did not include API bike "${firstBike.name}"`
+      );
+    }
+    if (route === '/policies/ordering') {
+      assert(
+        html.includes('15') && html.includes('PayOS'),
+        'Web /policies/ordering HTML missing grounded PayOS / 15-minute policy text'
       );
     }
     routeChecks.push({ route, status: res.status, bytes: html.length });
@@ -125,7 +194,9 @@ async function main() {
         priceVnd: firstBike.priceVnd,
         availableQty: firstBike.availableQty,
       },
+      chatbotCitationsCount: assistantMsg.citations.length,
       mockPaymentBlocked404: expectProd,
+      mockOAuthBlocked404: expectProd,
       webRoutes: routeChecks,
     })
   );

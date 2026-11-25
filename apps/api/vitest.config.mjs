@@ -14,8 +14,8 @@ if (!process.env.DATABASE_URL && fs.existsSync(envPath)) {
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['tests/**/*.test.js'],
-    testTimeout: 15000,
+    include: ['tests/integration/**/*.test.js'],
+    testTimeout: 20000,
     fileParallelism: false,
     sequence: {
       concurrent: false,

@@ -54,9 +54,35 @@ This guide walks through provisioning **100% free infrastructure** across **Neon
 - **PayOS:** Register merchant channel, set webhook URL to `https://api.dirtfit.vn/api/v1/payments/webhooks/payos`, and copy `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`.
 - **Resend:** Create API key (`RESEND_API_KEY`) and verify sending domain (`EMAIL_FROM`).
 
-### Step 2.5: Backend API on Render (`render.yaml`)
+### Step 2.5: Google OAuth 2.0 Credentials — Google Cloud Console ($0/Month)
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create a project (no billing account required).
+2. Configure **OAuth consent screen** (`External`):
+   - App name: `DirtFit Commerce`, support email, and public policy URL (`https://dirtfit.vn/policies/terms`).
+   - Add strictly non-sensitive scopes (`openid`, `email`, `profile`) so no paid verification is needed.
+3. Navigate to **Clients -> Create OAuth client ID -> Web application**:
+   - **Authorized JavaScript origins:** `http://localhost:3000` (local) and `https://dirtfit.vn` (production).
+   - **Authorized redirect URIs:**
+     - Local: `http://localhost:4000/api/v1/auth/google/callback`
+     - Production: `https://api.dirtfit.vn/api/v1/auth/google/callback` (or `https://<render-service>.onrender.com/api/v1/auth/google/callback`).
+4. Set on Render (keep `ENABLE_MOCK_OAUTH=false` strictly in production — `env.js` fails fast if enabled):
+   - `GOOGLE_OAUTH_ENABLED=true`
+   - `ENABLE_MOCK_OAUTH=false`
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`
+   - `OAUTH_STATE_SECRET` (auto-generated >= 32 bytes by `render.yaml`)
+
+### Step 2.6: Google AI Studio Gemini API Key ($0 Free Tier)
+1. Create a Free Tier API key at [Google AI Studio](https://aistudio.google.com/apikey) (no credit card required).
+2. Configure on Render:
+   - `CHAT_PROVIDER=auto` (`auto` uses Gemini when `GEMINI_API_KEY` is present and automatically falls back to `GroundedFallbackAdapter` on `429`/timeout or when unconfigured).
+   - `GEMINI_API_KEY` (sent strictly in `x-goog-api-key` header and redacted in Pino logs).
+   - `GEMINI_MODEL=gemini-2.5-flash`
+   - `CHAT_TIMEOUT_MS=12000`
+   - `CHAT_RATE_LIMIT_MAX=15` (protects Gemini Free Tier RPM/RPD & Upstash Redis commands).
+   - `CHAT_GUEST_SESSION_TTL_DAYS=7` (expired anonymous sessions are purged automatically by `sweeper-cron.yml`).
+
+### Step 2.7: Backend API on Render (`render.yaml`)
 1. In Render Dashboard, choose **New -> Blueprint** and point to this repository (`render.yaml`).
-2. Render pre-fills `NODE_ENV=production`, `ENABLE_MOCK_PAYMENT=false`, `PAYMENT_DEFAULT_PROVIDER=PAYOS`, `STORAGE_DRIVER=r2`, `RUN_MIGRATIONS=false`, `RUN_SEED=false`, and generates 64-byte secrets for `JWT_ACCESS_SECRET`, `REFRESH_TOKEN_PEPPER`, `COOKIE_SECRET`, and `CRON_HMAC_SECRET`.
+2. Render pre-fills `NODE_ENV=production`, `ENABLE_MOCK_PAYMENT=false`, `ENABLE_MOCK_OAUTH=false`, `PAYMENT_DEFAULT_PROVIDER=PAYOS`, `STORAGE_DRIVER=r2`, `CHAT_PROVIDER=auto`, `GEMINI_MODEL=gemini-2.5-flash`, `RUN_MIGRATIONS=false`, `RUN_SEED=false`, and generates secrets for `JWT_ACCESS_SECRET`, `REFRESH_TOKEN_PEPPER`, `COOKIE_SECRET`, `CRON_HMAC_SECRET`, and `OAUTH_STATE_SECRET`.
 3. Fill in the remaining `sync: false` secrets:
    - `APP_URL=https://dirtfit.vn`
    - `API_URL=https://api.dirtfit.vn`
@@ -64,13 +90,14 @@ This guide walks through provisioning **100% free infrastructure** across **Neon
    - `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`
    - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BASE_URL`
    - `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`, `RESEND_API_KEY`
+   - Optional `v2.0`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `GEMINI_API_KEY`
 4. Copy the Render service **Deploy Hook URL** (`Settings -> Deploy Hook`) for GitHub Actions CD.
 
-> **Cross-Origin HttpOnly Cookie Guidance:**
+> **Cross-Origin HttpOnly Cookie & OAuth Guidance:**
 > - **Best (Same root domain):** Bind `dirtfit.vn` (Vercel) and `api.dirtfit.vn` (Render) -> set `COOKIE_SAME_SITE=lax` and `COOKIE_SECURE=true`.
-> - **Fallback (Separate `.vercel.app` & `.onrender.com` domains):** Keep `COOKIE_SAME_SITE=none` and `COOKIE_SECURE=true` (configured by default in `render.yaml`).
+> - **Fallback (Separate `.vercel.app` & `.onrender.com` domains):** Keep `COOKIE_SAME_SITE=none` and `COOKIE_SECURE=true` (configured by default in `render.yaml`). OAuth callback uses a 60-second single-use Redis ticket exchange (`POST /api/v1/auth/oauth/exchange`) so cross-domain cookies are never blocked.
 
-### Step 2.6: Frontend Web on Vercel Hobby (`vercel.json`)
+### Step 2.8: Frontend Web on Vercel Hobby (`vercel.json`)
 1. Import repository in Vercel with **Root Directory** set to `apps/web` (or monorepo root with `apps/web` selected; `vercel.json` lives at repo root).
 2. Set Environment Variables (never place secrets in `NEXT_PUBLIC_*`):
    - `NEXT_PUBLIC_API_URL=https://api.dirtfit.vn`

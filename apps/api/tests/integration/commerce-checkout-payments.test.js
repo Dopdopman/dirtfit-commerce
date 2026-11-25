@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from '../../src/app.js';
 import { signMockWebhookBody } from '../../src/modules/payments/adapters/mock.adapter.js';
 import { signPayOSWebhookData } from '../../src/modules/payments/adapters/payos.adapter.js';
+import { startTestServer } from './helpers/http-client.js';
 
 const SHIPPING_ADDRESS = {
   recipientName: 'Nguyen Van Enduro',
@@ -13,8 +13,10 @@ const SHIPPING_ADDRESS = {
   streetAddress: '468 Xa Lo Ha Noi',
 };
 
-describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Payments & Test Rides', () => {
+describe('Phase 5/12 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Payments & Test Rides (Supertest)', () => {
+  let server;
   let app;
+  let request;
   let adminToken;
   let salesToken;
   let hondaBrand;
@@ -30,49 +32,29 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
   const createdOrderIds = [];
   const createdTestRideIds = [];
 
-  /**
-   * Register a fresh temporary customer user for isolated concurrent/IDOR testing.
-   * @param {string} tag
-   * @returns {Promise<{ token: string, user: object }>}
-   */
   async function registerCustomer(tag) {
     const email = `p5-${tag}-${runId}@dirtfit.vn`;
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/register',
-      payload: {
-        email,
-        password: 'StrongRiderPass!2026',
-        fullName: `Phase5 Rider ${tag}`,
-        phone: '0901234567',
-      },
+    const res = await request.post('/api/v1/auth/register').send({
+      email,
+      password: 'StrongRiderPass!2026',
+      fullName: `Phase5 Rider ${tag}`,
+      phone: '0901234567',
     });
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    createdUserIds.push(body.data.user.id);
-    return { token: body.data.accessToken, user: body.data.user };
+    expect(res.status).toBe(201);
+    createdUserIds.push(res.body.data.user.id);
+    return { token: res.body.data.accessToken, user: res.body.data.user };
   }
 
-  /**
-   * Create an isolated ACTIVE test bike via Admin API.
-   * @param {object} opts
-   * @param {string} opts.suffix
-   * @param {number} opts.stockQty
-   * @param {number} [opts.priceVnd]
-   * @param {number} [opts.depositAmountVnd]
-   * @returns {Promise<object>}
-   */
   async function createTestBike({
     suffix,
     stockQty,
     priceVnd = 250_000_000,
     depositAmountVnd = 25_000_000,
   }) {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/bikes',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const res = await request
+      .post('/api/v1/admin/bikes')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         brandId: hondaBrand.id,
         sku: `P5-${suffix}-${runId}`,
         name: `Phase5 Test Bike ${suffix}`,
@@ -106,28 +88,18 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
           handlebarGripYMm: 1170,
           wetWeightKg: 112,
         },
-      },
-    });
-    expect(res.statusCode).toBe(201);
-    const bike = res.json().data.bike;
+      });
+    expect(res.status).toBe(201);
+    const bike = res.body.data.bike;
     createdBikeIds.push(bike.id);
     return bike;
   }
 
-  /**
-   * Create an isolated ACTIVE test accessory via Admin API.
-   * @param {object} opts
-   * @param {string} opts.suffix
-   * @param {number} opts.stockQty
-   * @param {number} [opts.priceVnd]
-   * @returns {Promise<object>}
-   */
   async function createTestAccessory({ suffix, stockQty, priceVnd = 2_500_000 }) {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/accessories',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const res = await request
+      .post('/api/v1/admin/accessories')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         sku: `P5ACC-${suffix}-${runId}`,
         name: `Phase5 Test Accessory ${suffix}`,
         slug: `phase5-acc-${suffix}-${runId}`,
@@ -137,16 +109,15 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
         stockQty,
         status: 'ACTIVE',
         ergoImpactJson: { loweringLinkMm: 30, forkDropMm: 10 },
-      },
-    });
-    expect(res.statusCode).toBe(201);
-    const acc = res.json().data.accessory;
+      });
+    expect(res.status).toBe(201);
+    const acc = res.body.data.accessory;
     createdAccessoryIds.push(acc.id);
     return acc;
   }
 
   beforeAll(async () => {
-    app = await buildApp({
+    server = await startTestServer({
       envOverrides: {
         NODE_ENV: 'test',
         SWAGGER_ENABLED: true,
@@ -160,30 +131,28 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       },
       rateLimitNamespace: `df:rl:phase5:${runId}:`,
     });
+    app = server.app;
+    request = server.request;
 
     const [adminLogin, salesLogin, brandRow] = await Promise.all([
-      app.inject({
-        method: 'POST',
-        url: '/api/v1/auth/login',
-        payload: { email: 'admin@dirtfit.vn', password: 'Admin@DirtFit2026!' },
-      }),
-      app.inject({
-        method: 'POST',
-        url: '/api/v1/auth/login',
-        payload: { email: 'sales@dirtfit.vn', password: 'Sales@DirtFit2026!' },
-      }),
+      request
+        .post('/api/v1/auth/login')
+        .send({ email: 'admin@dirtfit.vn', password: 'Admin@DirtFit2026!' }),
+      request
+        .post('/api/v1/auth/login')
+        .send({ email: 'sales@dirtfit.vn', password: 'Sales@DirtFit2026!' }),
       app.prisma.brand.findUnique({ where: { slug: 'honda' } }),
     ]);
 
-    expect(adminLogin.statusCode).toBe(200);
-    expect(salesLogin.statusCode).toBe(200);
-    adminToken = adminLogin.json().data.accessToken;
-    salesToken = salesLogin.json().data.accessToken;
+    expect(adminLogin.status).toBe(200);
+    expect(salesLogin.status).toBe(200);
+    adminToken = adminLogin.body.data.accessToken;
+    salesToken = salesLogin.body.data.accessToken;
     hondaBrand = brandRow;
   });
 
   afterAll(async () => {
-    if (!app) {
+    if (!server) {
       return;
     }
 
@@ -273,11 +242,11 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
         }
       } while (cursor !== '0');
     } finally {
-      await app.close();
+      await server.close();
     }
   });
 
-  it('prevents overselling via sorted SELECT FOR UPDATE when 5 users race for stockQty=1 bike, and supports combo cart', async () => {
+  it('prevents overselling via sorted SELECT FOR UPDATE when 5 users race over real TCP HTTP for stockQty=1 bike, and supports combo cart', async () => {
     const scarceBike = await createTestBike({ suffix: 'race', stockQty: 1 });
     const racers = await Promise.all([
       registerCustomer('race1'),
@@ -287,56 +256,44 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       registerCustomer('race5'),
     ]);
 
-    // Add the scarce bike to each racer's persistent cart beforehand
     await Promise.all(
       racers.map((racer) =>
-        app.inject({
-          method: 'POST',
-          url: '/api/v1/cart/items',
-          headers: { authorization: `Bearer ${racer.token}` },
-          payload: {
-            itemType: 'BIKE',
-            bikeId: scarceBike.id,
-            quantity: 1,
-          },
+        request.post('/api/v1/cart/items').set('authorization', `Bearer ${racer.token}`).send({
+          itemType: 'BIKE',
+          bikeId: scarceBike.id,
+          quantity: 1,
         })
       )
     );
 
-    // Fire 5 parallel POST /api/v1/orders/checkout requests via Promise.all
     const responses = await Promise.all(
       racers.map((racer, idx) =>
-        app.inject({
-          method: 'POST',
-          url: '/api/v1/orders/checkout',
-          headers: {
-            authorization: `Bearer ${racer.token}`,
-            'idempotency-key': `race-key-${runId}-${idx}`,
-          },
-          payload: {
+        request
+          .post('/api/v1/orders/checkout')
+          .set('authorization', `Bearer ${racer.token}`)
+          .set('idempotency-key', `race-key-${runId}-${idx}`)
+          .send({
             orderType: 'BIKE_DEPOSIT',
             paymentMethod: 'MOCK',
             shippingAddress: SHIPPING_ADDRESS,
-          },
-        })
+          })
       )
     );
 
-    const createdResponses = responses.filter((res) => res.statusCode === 201);
-    const conflictResponses = responses.filter((res) => res.statusCode === 409);
+    const createdResponses = responses.filter((res) => res.status === 201);
+    const conflictResponses = responses.filter((res) => res.status === 409);
 
     expect(createdResponses).toHaveLength(1);
     expect(conflictResponses).toHaveLength(4);
-    expect(conflictResponses[0].json().code).toBe('INSUFFICIENT_STOCK');
+    expect(conflictResponses[0].body.code).toBe('INSUFFICIENT_STOCK');
 
-    const winnerOrder = createdResponses[0].json().data.order;
+    const winnerOrder = createdResponses[0].body.data.order;
     createdOrderIds.push(winnerOrder.id);
 
     const dbBike = await app.prisma.bike.findUnique({ where: { id: scarceBike.id } });
     expect(dbBike.stockQty).toBe(1);
     expect(dbBike.reservedQty).toBe(1);
 
-    // Also test Simulator Combo Upsell add-to-cart with labor VND calculation
     const comboBike = await createTestBike({
       suffix: 'combo',
       stockQty: 3,
@@ -349,11 +306,10 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       priceVnd: 2_800_000,
     });
 
-    const putCompat = await app.inject({
-      method: 'PUT',
-      url: `/api/v1/admin/bikes/${comboBike.id}/compatibilities`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const putCompat = await request
+      .put(`/api/v1/admin/bikes/${comboBike.id}/compatibilities`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         compatibilities: [
           {
             accessoryId: comboAcc.id,
@@ -363,23 +319,20 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
             installLaborVnd: 450_000,
           },
         ],
-      },
-    });
-    expect(putCompat.statusCode).toBe(200);
+      });
+    expect(putCompat.status).toBe(200);
 
     const comboUser = await registerCustomer('combo');
-    const comboCartRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${comboUser.token}` },
-      payload: {
+    const comboCartRes = await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${comboUser.token}`)
+      .send({
         bikeId: comboBike.id,
         accessoryIds: [comboAcc.id],
         quantity: 1,
-      },
-    });
-    expect(comboCartRes.statusCode).toBe(201);
-    const cart = comboCartRes.json().data.cart;
+      });
+    expect(comboCartRes.status).toBe(201);
+    const cart = comboCartRes.body.data.cart;
     expect(cart.items).toHaveLength(2);
     expect(typeof cart.summary.totalVnd).toBe('number');
     expect(cart.summary.installLaborTotalVnd).toBe(450_000);
@@ -392,12 +345,10 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     const bike = await createTestBike({ suffix: 'idem', stockQty: 2 });
     const customer = await registerCustomer('idem');
 
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${customer.token}` },
-      payload: { itemType: 'BIKE', bikeId: bike.id, quantity: 1 },
-    });
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${customer.token}`)
+      .send({ itemType: 'BIKE', bikeId: bike.id, quantity: 1 });
 
     const idemKey = `idem-key-${runId}`;
     const checkoutPayload = {
@@ -406,62 +357,44 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       shippingAddress: SHIPPING_ADDRESS,
     };
 
-    // Missing Idempotency-Key returns 400
-    const missingKeyRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: { authorization: `Bearer ${customer.token}` },
-      payload: checkoutPayload,
-    });
-    expect(missingKeyRes.statusCode).toBe(400);
-    expect(missingKeyRes.json().code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+    const missingKeyRes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${customer.token}`)
+      .send(checkoutPayload);
+    expect(missingKeyRes.status).toBe(400);
+    expect(missingKeyRes.body.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
 
-    // First valid checkout
-    const firstRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${customer.token}`,
-        'idempotency-key': idemKey,
-      },
-      payload: checkoutPayload,
-    });
-    expect(firstRes.statusCode).toBe(201);
-    const firstOrderId = firstRes.json().data.order.id;
+    const firstRes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${customer.token}`)
+      .set('idempotency-key', idemKey)
+      .send(checkoutPayload);
+    expect(firstRes.status).toBe(201);
+    const firstOrderId = firstRes.body.data.order.id;
     createdOrderIds.push(firstOrderId);
 
-    // Replay same key + exact same payload -> returns same orderId, reservedQty remains 1
-    const replayRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${customer.token}`,
-        'idempotency-key': idemKey,
-      },
-      payload: checkoutPayload,
-    });
-    expect(replayRes.statusCode).toBe(201);
-    expect(replayRes.json().data.order.id).toBe(firstOrderId);
+    const replayRes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${customer.token}`)
+      .set('idempotency-key', idemKey)
+      .send(checkoutPayload);
+    expect(replayRes.status).toBe(201);
+    expect(replayRes.body.data.order.id).toBe(firstOrderId);
 
     const dbBikeAfterReplay = await app.prisma.bike.findUnique({ where: { id: bike.id } });
     expect(dbBikeAfterReplay.reservedQty).toBe(1);
 
-    // Same key + mutated payload -> 409 Conflict (IDEMPOTENCY_KEY_PAYLOAD_MISMATCH)
-    const mismatchRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${customer.token}`,
-        'idempotency-key': idemKey,
-      },
-      payload: {
+    const mismatchRes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${customer.token}`)
+      .set('idempotency-key', idemKey)
+      .send({
         ...checkoutPayload,
         orderType: 'FULL_PURCHASE',
-      },
-    });
-    expect(mismatchRes.statusCode).toBe(409);
+      });
+    expect(mismatchRes.status).toBe(409);
     expect(mismatchRes.headers['content-type']).toContain('application/problem+json');
-    expect(mismatchRes.json().code).toBe('IDEMPOTENCY_KEY_PAYLOAD_MISMATCH');
+    expect(mismatchRes.body.code).toBe('IDEMPOTENCY_KEY_PAYLOAD_MISMATCH');
   });
 
   it('reclaims expired reservations inline via Lazy Expiration during new checkout without waiting for cron', async () => {
@@ -469,63 +402,48 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     const oldCustomer = await registerCustomer('lazy-old');
     const newCustomer = await registerCustomer('lazy-new');
 
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${oldCustomer.token}` },
-      payload: { itemType: 'BIKE', bikeId: lastUnitBike.id, quantity: 1 },
-    });
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${oldCustomer.token}`)
+      .send({ itemType: 'BIKE', bikeId: lastUnitBike.id, quantity: 1 });
 
-    const oldCheckout = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${oldCustomer.token}`,
-        'idempotency-key': `lazy-old-${runId}`,
-      },
-      payload: {
+    const oldCheckout = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${oldCustomer.token}`)
+      .set('idempotency-key', `lazy-old-${runId}`)
+      .send({
         orderType: 'BIKE_DEPOSIT',
         paymentMethod: 'MOCK',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(oldCheckout.statusCode).toBe(201);
-    const oldOrderId = oldCheckout.json().data.order.id;
+      });
+    expect(oldCheckout.status).toBe(201);
+    const oldOrderId = oldCheckout.body.data.order.id;
     createdOrderIds.push(oldOrderId);
 
-    // Force old reservation into the past (simulate 15-min TTL expired before cron ran)
     await app.prisma.inventoryReservation.updateMany({
       where: { orderId: oldOrderId },
       data: { expiresAt: new Date(Date.now() - 120_000) },
     });
 
-    // New customer adds bike (availableQty is 1 via Lazy Expiration) and checks out immediately
-    const addRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${newCustomer.token}` },
-      payload: { itemType: 'BIKE', bikeId: lastUnitBike.id, quantity: 1 },
-    });
-    expect(addRes.statusCode).toBe(201);
+    const addRes = await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${newCustomer.token}`)
+      .send({ itemType: 'BIKE', bikeId: lastUnitBike.id, quantity: 1 });
+    expect(addRes.status).toBe(201);
 
-    const newCheckout = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${newCustomer.token}`,
-        'idempotency-key': `lazy-new-${runId}`,
-      },
-      payload: {
+    const newCheckout = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${newCustomer.token}`)
+      .set('idempotency-key', `lazy-new-${runId}`)
+      .send({
         orderType: 'BIKE_DEPOSIT',
         paymentMethod: 'MOCK',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(newCheckout.statusCode).toBe(201);
-    const newOrderId = newCheckout.json().data.order.id;
+      });
+    expect(newCheckout.status).toBe(201);
+    const newOrderId = newCheckout.body.data.order.id;
     createdOrderIds.push(newOrderId);
 
-    // Old order is automatically marked EXPIRED and bike reservedQty remains 1
     const oldOrderDb = await app.prisma.order.findUnique({ where: { id: oldOrderId } });
     const oldResDb = await app.prisma.inventoryReservation.findFirst({
       where: { orderId: oldOrderId },
@@ -538,7 +456,7 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     expect(bikeDb.reservedQty).toBe(1);
   });
 
-  it('enforces COD rules, verifies PayOS/Mock webhook HMAC signatures, commits stock once on replay, and supports cancellation & Admin transitions', async () => {
+  it('enforces COD rules, verifies PayOS/Mock webhook HMAC signatures over raw HTTP body, commits stock once on replay, and supports cancellation & Admin transitions', async () => {
     const bike = await createTestBike({
       suffix: 'pay',
       stockQty: 3,
@@ -552,141 +470,104 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     });
     const buyer = await registerCustomer('pay-buyer');
 
-    // 1. COD strictly blocked when cart contains a motorcycle
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${buyer.token}` },
-      payload: { itemType: 'BIKE', bikeId: bike.id, quantity: 1 },
-    });
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${buyer.token}`)
+      .send({ itemType: 'BIKE', bikeId: bike.id, quantity: 1 });
 
-    const codBikeAttempt = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${buyer.token}`,
-        'idempotency-key': `cod-ban-${runId}`,
-      },
-      payload: {
+    const codBikeAttempt = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${buyer.token}`)
+      .set('idempotency-key', `cod-ban-${runId}`)
+      .send({
         orderType: 'FULL_PURCHASE',
         paymentMethod: 'COD',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(codBikeAttempt.statusCode).toBe(422);
-    expect(codBikeAttempt.json().code).toBe('COD_NOT_ELIGIBLE');
+      });
+    expect(codBikeAttempt.status).toBe(422);
+    expect(codBikeAttempt.body.code).toBe('COD_NOT_ELIGIBLE');
 
-    // 2. Place bike deposit order via PAYOS, then verify invalid signature -> valid signature -> replay idempotency
-    const payosCheckout = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${buyer.token}`,
-        'idempotency-key': `payos-dep-${runId}`,
-      },
-      payload: {
+    const payosCheckout = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${buyer.token}`)
+      .set('idempotency-key', `payos-dep-${runId}`)
+      .send({
         orderType: 'BIKE_DEPOSIT',
         paymentMethod: 'PAYOS',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(payosCheckout.statusCode).toBe(201);
-    const depositOrder = payosCheckout.json().data.order;
+      });
+    expect(payosCheckout.status).toBe(201);
+    const depositOrder = payosCheckout.body.data.order;
     createdOrderIds.push(depositOrder.id);
     expect(depositOrder.payableNowVnd).toBe(30_000_000);
     expect(depositOrder.remainingBalanceVnd).toBe(270_000_000);
 
-    // Tampered PayOS HMAC signature -> 401
     const payosData = {
       orderCode: depositOrder.orderNumber,
       amount: 30_000_000,
       reference: `PAYOS_REF_${runId}`,
     };
-    const badPayosRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/payments/webhooks/payos',
-      payload: {
-        code: '00',
-        success: true,
-        data: payosData,
-        signature: 'deadbeefdeadbeefdeadbeefdeadbeef',
-      },
+    const badPayosRes = await request.post('/api/v1/payments/webhooks/payos').send({
+      code: '00',
+      success: true,
+      data: payosData,
+      signature: 'deadbeefdeadbeefdeadbeefdeadbeef',
     });
-    expect(badPayosRes.statusCode).toBe(401);
-    expect(badPayosRes.json().code).toBe('INVALID_PAYMENT_SIGNATURE');
+    expect(badPayosRes.status).toBe(401);
+    expect(badPayosRes.body.code).toBe('INVALID_PAYMENT_SIGNATURE');
 
-    // Valid PayOS HMAC signature -> DEPOSIT_PAID and stockQty decremented 3 -> 2, reservedQty 1 -> 0
     const validPayosSig = signPayOSWebhookData(payosData, payosChecksumKey);
-    const goodPayosRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/payments/webhooks/payos',
-      payload: {
-        code: '00',
-        success: true,
-        data: payosData,
-        signature: validPayosSig,
-      },
+    const goodPayosRes = await request.post('/api/v1/payments/webhooks/payos').send({
+      code: '00',
+      success: true,
+      data: payosData,
+      signature: validPayosSig,
     });
-    expect(goodPayosRes.statusCode).toBe(200);
-    expect(goodPayosRes.json().data.alreadyProcessed).toBe(false);
-    expect(goodPayosRes.json().data.order.status).toBe('DEPOSIT_PAID');
+    expect(goodPayosRes.status).toBe(200);
+    expect(goodPayosRes.body.data.alreadyProcessed).toBe(false);
+    expect(goodPayosRes.body.data.order.status).toBe('DEPOSIT_PAID');
 
     const bikeAfterCommit = await app.prisma.bike.findUnique({ where: { id: bike.id } });
     expect(bikeAfterCommit.stockQty).toBe(2);
     expect(bikeAfterCommit.reservedQty).toBe(0);
 
-    // Replay same PayOS webhook a 2nd time -> 200 OK, alreadyProcessed=true, NO duplicate stock deduction
-    const replayPayosRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/payments/webhooks/payos',
-      payload: {
-        code: '00',
-        success: true,
-        data: payosData,
-        signature: validPayosSig,
-      },
+    const replayPayosRes = await request.post('/api/v1/payments/webhooks/payos').send({
+      code: '00',
+      success: true,
+      data: payosData,
+      signature: validPayosSig,
     });
-    expect(replayPayosRes.statusCode).toBe(200);
-    expect(replayPayosRes.json().data.alreadyProcessed).toBe(true);
+    expect(replayPayosRes.status).toBe(200);
+    expect(replayPayosRes.body.data.alreadyProcessed).toBe(true);
 
     const bikeAfterReplay = await app.prisma.bike.findUnique({ where: { id: bike.id } });
     expect(bikeAfterReplay.stockQty).toBe(2);
     expect(bikeAfterReplay.reservedQty).toBe(0);
 
-    // Admin transitions DEPOSIT_PAID -> PREPARING with AuditLog
-    const adminTransition = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/admin/orders/${depositOrder.id}/status`,
-      headers: { authorization: `Bearer ${salesToken}` },
-      payload: { status: 'PREPARING', internalNote: 'Pre-delivery PDI check' },
-    });
-    expect(adminTransition.statusCode).toBe(200);
-    expect(adminTransition.json().data.order.status).toBe('PREPARING');
+    const adminTransition = await request
+      .patch(`/api/v1/admin/orders/${depositOrder.id}/status`)
+      .set('authorization', `Bearer ${salesToken}`)
+      .send({ status: 'PREPARING', internalNote: 'Pre-delivery PDI check' });
+    expect(adminTransition.status).toBe(200);
+    expect(adminTransition.body.data.order.status).toBe('PREPARING');
 
-    // 3. Accessory-only COD order succeeds (CONFIRMED immediately) + Mock webhook test on PENDING_PAYMENT order + cancel test
     const buyer2 = await registerCustomer('pay-buyer2');
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${buyer2.token}` },
-      payload: { itemType: 'ACCESSORY', accessoryId: acc.id, quantity: 2 },
-    });
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .send({ itemType: 'ACCESSORY', accessoryId: acc.id, quantity: 2 });
 
-    const codAccCheckout = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${buyer2.token}`,
-        'idempotency-key': `cod-acc-${runId}`,
-      },
-      payload: {
+    const codAccCheckout = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .set('idempotency-key', `cod-acc-${runId}`)
+      .send({
         orderType: 'ACCESSORY_ONLY',
         paymentMethod: 'COD',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(codAccCheckout.statusCode).toBe(201);
-    const codOrder = codAccCheckout.json().data.order;
+      });
+    expect(codAccCheckout.status).toBe(201);
+    const codOrder = codAccCheckout.body.data.order;
     createdOrderIds.push(codOrder.id);
     expect(codOrder.status).toBe('CONFIRMED');
     expect(codOrder.totalVnd).toBe(3_000_000);
@@ -694,28 +575,21 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     const accAfterCod = await app.prisma.accessory.findUnique({ where: { id: acc.id } });
     expect(accAfterCod.stockQty).toBe(3);
 
-    // Mock webhook simulate test + cancel release test
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${buyer2.token}` },
-      payload: { itemType: 'ACCESSORY', accessoryId: acc.id, quantity: 1 },
-    });
-    const mockCheckout = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${buyer2.token}`,
-        'idempotency-key': `mock-acc-${runId}`,
-      },
-      payload: {
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .send({ itemType: 'ACCESSORY', accessoryId: acc.id, quantity: 1 });
+    const mockCheckout = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .set('idempotency-key', `mock-acc-${runId}`)
+      .send({
         orderType: 'ACCESSORY_ONLY',
         paymentMethod: 'MOCK',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(mockCheckout.statusCode).toBe(201);
-    const mockOrder = mockCheckout.json().data.order;
+      });
+    expect(mockCheckout.status).toBe(201);
+    const mockOrder = mockCheckout.body.data.order;
     createdOrderIds.push(mockOrder.id);
 
     const mockBodyStr = JSON.stringify({
@@ -724,50 +598,37 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       providerTxId: `MOCK_TX_${runId}`,
     });
     const mockSig = signMockWebhookBody(mockBodyStr, mockWebhookSecret);
-    const mockWebhookRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/payments/mock/simulate-webhook',
-      headers: {
-        'content-type': 'application/json',
-        'x-mock-signature': mockSig,
-      },
-      payload: mockBodyStr,
-    });
-    expect(mockWebhookRes.statusCode).toBe(200);
-    expect(mockWebhookRes.json().data.order.status).toBe('PAID');
+    const mockWebhookRes = await request
+      .post('/api/v1/payments/mock/simulate-webhook')
+      .set('content-type', 'application/json')
+      .set('x-mock-signature', mockSig)
+      .send(mockBodyStr);
+    expect(mockWebhookRes.status).toBe(200);
+    expect(mockWebhookRes.body.data.order.status).toBe('PAID');
 
-    // Customer cancel test restores reservedQty
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${buyer2.token}` },
-      payload: { itemType: 'BIKE', bikeId: bike.id, quantity: 1 },
-    });
-    const cancelCheckout = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${buyer2.token}`,
-        'idempotency-key': `cancel-${runId}`,
-      },
-      payload: {
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .send({ itemType: 'BIKE', bikeId: bike.id, quantity: 1 });
+    const cancelCheckout = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .set('idempotency-key', `cancel-${runId}`)
+      .send({
         orderType: 'BIKE_DEPOSIT',
         paymentMethod: 'MOCK',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(cancelCheckout.statusCode).toBe(201);
-    const toCancelOrderId = cancelCheckout.json().data.order.id;
+      });
+    expect(cancelCheckout.status).toBe(201);
+    const toCancelOrderId = cancelCheckout.body.data.order.id;
     createdOrderIds.push(toCancelOrderId);
 
-    const cancelRes = await app.inject({
-      method: 'POST',
-      url: `/api/v1/orders/${toCancelOrderId}/cancel`,
-      headers: { authorization: `Bearer ${buyer2.token}` },
-      payload: { reason: 'Changed model year preference' },
-    });
-    expect(cancelRes.statusCode).toBe(200);
-    expect(cancelRes.json().data.order.status).toBe('CANCELLED');
+    const cancelRes = await request
+      .post(`/api/v1/orders/${toCancelOrderId}/cancel`)
+      .set('authorization', `Bearer ${buyer2.token}`)
+      .send({ reason: 'Changed model year preference' });
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.body.data.order.status).toBe('CANCELLED');
     const bikeAfterCancel = await app.prisma.bike.findUnique({ where: { id: bike.id } });
     expect(bikeAfterCancel.reservedQty).toBe(0);
   });
@@ -778,145 +639,113 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     const riderB = await registerCustomer('rider-b');
 
     const slotDate = '2026-12-28';
-    const slotsBefore = await app.inject({
-      method: 'GET',
-      url: `/api/v1/test-rides/slots?bikeId=${bike.id}&showroomCode=HCM_THU_DUC&date=${slotDate}`,
-    });
-    expect(slotsBefore.statusCode).toBe(200);
-    expect(slotsBefore.json().data.availableSlots).toContain('09:00-10:30');
+    const slotsBefore = await request.get(
+      `/api/v1/test-rides/slots?bikeId=${bike.id}&showroomCode=HCM_THU_DUC&date=${slotDate}`
+    );
+    expect(slotsBefore.status).toBe(200);
+    expect(slotsBefore.body.data.availableSlots).toContain('09:00-10:30');
 
-    // Rider A books slot -> 201
-    const bookA = await app.inject({
-      method: 'POST',
-      url: '/api/v1/test-rides',
-      headers: { authorization: `Bearer ${riderA.token}` },
-      payload: {
+    const bookA = await request
+      .post('/api/v1/test-rides')
+      .set('authorization', `Bearer ${riderA.token}`)
+      .send({
         bikeId: bike.id,
         showroomCode: 'HCM_THU_DUC',
         scheduledDate: slotDate,
         timeSlot: '09:00-10:30',
         licenseClass: 'A2',
-      },
-    });
-    expect(bookA.statusCode).toBe(201);
-    const bookingA = bookA.json().data.booking;
+      });
+    expect(bookA.status).toBe(201);
+    const bookingA = bookA.body.data.booking;
     createdTestRideIds.push(bookingA.id);
 
-    // Rider B tries same slot -> 409 TEST_RIDE_SLOT_TAKEN
-    const bookBConflict = await app.inject({
-      method: 'POST',
-      url: '/api/v1/test-rides',
-      headers: { authorization: `Bearer ${riderB.token}` },
-      payload: {
+    const bookBConflict = await request
+      .post('/api/v1/test-rides')
+      .set('authorization', `Bearer ${riderB.token}`)
+      .send({
         bikeId: bike.id,
         showroomCode: 'HCM_THU_DUC',
         scheduledDate: slotDate,
         timeSlot: '09:00-10:30',
         licenseClass: 'A2',
-      },
-    });
-    expect(bookBConflict.statusCode).toBe(409);
-    expect(bookBConflict.json().code).toBe('TEST_RIDE_SLOT_TAKEN');
+      });
+    expect(bookBConflict.status).toBe(409);
+    expect(bookBConflict.body.code).toBe('TEST_RIDE_SLOT_TAKEN');
 
-    // Cross-user IDOR: Rider B cannot cancel Rider A's test ride OR view Rider A's order
-    const idorTestRide = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/test-rides/${bookingA.id}/cancel`,
-      headers: { authorization: `Bearer ${riderB.token}` },
-    });
-    expect(idorTestRide.statusCode).toBe(403);
+    const idorTestRide = await request
+      .patch(`/api/v1/test-rides/${bookingA.id}/cancel`)
+      .set('authorization', `Bearer ${riderB.token}`);
+    expect(idorTestRide.status).toBe(403);
 
-    // Rider A places an order, Rider B gets 403 reading or cancelling it
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${riderA.token}` },
-      payload: { itemType: 'BIKE', bikeId: bike.id, quantity: 1 },
-    });
-    const orderARes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${riderA.token}`,
-        'idempotency-key': `idor-ord-${runId}`,
-      },
-      payload: {
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${riderA.token}`)
+      .send({ itemType: 'BIKE', bikeId: bike.id, quantity: 1 });
+    const orderARes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${riderA.token}`)
+      .set('idempotency-key', `idor-ord-${runId}`)
+      .send({
         orderType: 'BIKE_DEPOSIT',
         paymentMethod: 'MOCK',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(orderARes.statusCode).toBe(201);
-    const orderA = orderARes.json().data.order;
+      });
+    expect(orderARes.status).toBe(201);
+    const orderA = orderARes.body.data.order;
     createdOrderIds.push(orderA.id);
 
-    const idorReadOrder = await app.inject({
-      method: 'GET',
-      url: `/api/v1/orders/${orderA.id}`,
-      headers: { authorization: `Bearer ${riderB.token}` },
-    });
-    expect(idorReadOrder.statusCode).toBe(403);
+    const idorReadOrder = await request
+      .get(`/api/v1/orders/${orderA.id}`)
+      .set('authorization', `Bearer ${riderB.token}`);
+    expect(idorReadOrder.status).toBe(403);
 
-    const idorCancelOrder = await app.inject({
-      method: 'POST',
-      url: `/api/v1/orders/${orderA.id}/cancel`,
-      headers: { authorization: `Bearer ${riderB.token}` },
-    });
-    expect(idorCancelOrder.statusCode).toBe(403);
+    const idorCancelOrder = await request
+      .post(`/api/v1/orders/${orderA.id}/cancel`)
+      .set('authorization', `Bearer ${riderB.token}`);
+    expect(idorCancelOrder.status).toBe(403);
 
-    // Rider A cancels their booking -> frees slot for Rider B to book cleanly
-    const cancelA = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/test-rides/${bookingA.id}/cancel`,
-      headers: { authorization: `Bearer ${riderA.token}` },
-    });
-    expect(cancelA.statusCode).toBe(200);
-    expect(cancelA.json().data.booking.status).toBe('CANCELLED');
+    const cancelA = await request
+      .patch(`/api/v1/test-rides/${bookingA.id}/cancel`)
+      .set('authorization', `Bearer ${riderA.token}`);
+    expect(cancelA.status).toBe(200);
+    expect(cancelA.body.data.booking.status).toBe('CANCELLED');
 
-    const bookBSuccess = await app.inject({
-      method: 'POST',
-      url: '/api/v1/test-rides',
-      headers: { authorization: `Bearer ${riderB.token}` },
-      payload: {
+    const bookBSuccess = await request
+      .post('/api/v1/test-rides')
+      .set('authorization', `Bearer ${riderB.token}`)
+      .send({
         bikeId: bike.id,
         showroomCode: 'HCM_THU_DUC',
         scheduledDate: slotDate,
         timeSlot: '09:00-10:30',
         licenseClass: 'A2',
-      },
-    });
-    expect(bookBSuccess.statusCode).toBe(201);
-    createdTestRideIds.push(bookBSuccess.json().data.booking.id);
+      });
+    expect(bookBSuccess.status).toBe(201);
+    createdTestRideIds.push(bookBSuccess.body.data.booking.id);
 
-    // Internal Sweeper: expire orderA's reservation and verify X-Cron-Secret enforcement
     await app.prisma.inventoryReservation.updateMany({
       where: { orderId: orderA.id },
       data: { expiresAt: new Date(Date.now() - 60_000) },
     });
 
-    const badSweeper = await app.inject({
-      method: 'POST',
-      url: '/api/v1/internal/sweeper/expire-reservations',
-      headers: { 'x-cron-secret': 'wrong-secret' },
-    });
-    expect(badSweeper.statusCode).toBe(401);
+    const badSweeper = await request
+      .post('/api/v1/internal/sweeper/expire-reservations')
+      .set('x-cron-secret', 'wrong-secret');
+    expect(badSweeper.status).toBe(401);
 
-    const goodSweeper = await app.inject({
-      method: 'POST',
-      url: '/api/v1/internal/sweeper/expire-reservations',
-      headers: { 'x-cron-secret': cronSecret },
-    });
-    expect(goodSweeper.statusCode).toBe(200);
-    expect(goodSweeper.json().data.sweptReservations).toBeGreaterThanOrEqual(1);
-    expect(goodSweeper.json().data.expiredOrders).toBeGreaterThanOrEqual(1);
+    const goodSweeper = await request
+      .post('/api/v1/internal/sweeper/expire-reservations')
+      .set('x-cron-secret', cronSecret);
+    expect(goodSweeper.status).toBe(200);
+    expect(goodSweeper.body.data.sweptReservations).toBeGreaterThanOrEqual(1);
+    expect(goodSweeper.body.data.expiredOrders).toBeGreaterThanOrEqual(1);
 
     const sweptOrderDb = await app.prisma.order.findUnique({ where: { id: orderA.id } });
     expect(sweptOrderDb.status).toBe('EXPIRED');
 
-    // OpenAPI spec includes Phase 5 paths cleanly
-    const docsRes = await app.inject({ method: 'GET', url: '/docs/json' });
-    expect(docsRes.statusCode).toBe(200);
-    const paths = docsRes.json().paths;
+    const docsRes = await request.get('/docs/json');
+    expect(docsRes.status).toBe(200);
+    const paths = docsRes.body.paths;
     expect(paths['/api/v1/cart']).toBeTruthy();
     expect(paths['/api/v1/orders/checkout']).toBeTruthy();
     expect(paths['/api/v1/payments/webhooks/payos']).toBeTruthy();
@@ -930,64 +759,40 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
     const owner = await registerCustomer('sec6owner');
     const attacker = await registerCustomer('sec6attacker');
 
-    // Admin/Sales can fetch admin bike detail; CUSTOMER gets 403
     const [adminBikeRes, salesBikeRes, customerBikeRes] = await Promise.all([
-      app.inject({
-        method: 'GET',
-        url: `/api/v1/admin/bikes/${bike.id}`,
-        headers: { authorization: `Bearer ${adminToken}` },
-      }),
-      app.inject({
-        method: 'GET',
-        url: `/api/v1/admin/bikes/${bike.id}`,
-        headers: { authorization: `Bearer ${salesToken}` },
-      }),
-      app.inject({
-        method: 'GET',
-        url: `/api/v1/admin/bikes/${bike.id}`,
-        headers: { authorization: `Bearer ${owner.token}` },
-      }),
+      request.get(`/api/v1/admin/bikes/${bike.id}`).set('authorization', `Bearer ${adminToken}`),
+      request.get(`/api/v1/admin/bikes/${bike.id}`).set('authorization', `Bearer ${salesToken}`),
+      request.get(`/api/v1/admin/bikes/${bike.id}`).set('authorization', `Bearer ${owner.token}`),
     ]);
-    expect(adminBikeRes.statusCode).toBe(200);
-    expect(adminBikeRes.json().data.bike.id).toBe(bike.id);
-    expect(salesBikeRes.statusCode).toBe(200);
-    expect(customerBikeRes.statusCode).toBe(403);
+    expect(adminBikeRes.status).toBe(200);
+    expect(adminBikeRes.body.data.bike.id).toBe(bike.id);
+    expect(salesBikeRes.status).toBe(200);
+    expect(customerBikeRes.status).toBe(403);
 
-    // Create MOCK order for owner
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/cart/items',
-      headers: { authorization: `Bearer ${owner.token}` },
-      payload: { itemType: 'BIKE', bikeId: bike.id, quantity: 1 },
-    });
-    const orderRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/orders/checkout',
-      headers: {
-        authorization: `Bearer ${owner.token}`,
-        'idempotency-key': `sec6-mock-${runId}`,
-      },
-      payload: {
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${owner.token}`)
+      .send({ itemType: 'BIKE', bikeId: bike.id, quantity: 1 });
+    const orderRes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${owner.token}`)
+      .set('idempotency-key', `sec6-mock-${runId}`)
+      .send({
         orderType: 'BIKE_DEPOSIT',
         paymentMethod: 'MOCK',
         shippingAddress: SHIPPING_ADDRESS,
-      },
-    });
-    expect(orderRes.statusCode).toBe(201);
-    const order = orderRes.json().data.order;
+      });
+    expect(orderRes.status).toBe(201);
+    const order = orderRes.body.data.order;
     createdOrderIds.push(order.id);
 
-    // Anti-IDOR: unrelated customer gets 403 on /payments/mock/complete
-    const idorMockComplete = await app.inject({
-      method: 'POST',
-      url: '/api/v1/payments/mock/complete',
-      headers: { authorization: `Bearer ${attacker.token}` },
-      payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
-    });
-    expect(idorMockComplete.statusCode).toBe(403);
+    const idorMockComplete = await request
+      .post('/api/v1/payments/mock/complete')
+      .set('authorization', `Bearer ${attacker.token}`)
+      .send({ orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd });
+    expect(idorMockComplete.status).toBe(403);
 
-    // Disabled flag app & production app must NOT mount /payments/mock/complete (404)
-    const disabledFlagApp = await buildApp({
+    const disabledFlagServer = await startTestServer({
       envOverrides: {
         NODE_ENV: 'test',
         SWAGGER_ENABLED: false,
@@ -998,18 +803,16 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       rateLimitNamespace: `df:rl:phase7:flag:${runId}:`,
     });
     try {
-      const flagRes = await disabledFlagApp.inject({
-        method: 'POST',
-        url: '/api/v1/payments/mock/complete',
-        headers: { authorization: `Bearer ${owner.token}` },
-        payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
-      });
-      expect(flagRes.statusCode).toBe(404);
+      const flagRes = await disabledFlagServer.request
+        .post('/api/v1/payments/mock/complete')
+        .set('authorization', `Bearer ${owner.token}`)
+        .send({ orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd });
+      expect(flagRes.status).toBe(404);
     } finally {
-      await disabledFlagApp.close();
+      await disabledFlagServer.close();
     }
 
-    const prodApp = await buildApp({
+    const prodServer = await startTestServer({
       envOverrides: {
         NODE_ENV: 'production',
         SWAGGER_ENABLED: false,
@@ -1025,25 +828,20 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       rateLimitNamespace: `df:rl:phase7:prod:${runId}:`,
     });
     try {
-      const prodRes = await prodApp.inject({
-        method: 'POST',
-        url: '/api/v1/payments/mock/complete',
-        headers: { authorization: `Bearer ${owner.token}` },
-        payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
-      });
-      expect(prodRes.statusCode).toBe(404);
+      const prodRes = await prodServer.request
+        .post('/api/v1/payments/mock/complete')
+        .set('authorization', `Bearer ${owner.token}`)
+        .send({ orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd });
+      expect(prodRes.status).toBe(404);
     } finally {
-      await prodApp.close();
+      await prodServer.close();
     }
 
-    // Owner succeeds in non-prod when ENABLE_MOCK_PAYMENT=true -> DEPOSIT_PAID
-    const ownerCompleteRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/payments/mock/complete',
-      headers: { authorization: `Bearer ${owner.token}` },
-      payload: { orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd },
-    });
-    expect(ownerCompleteRes.statusCode).toBe(200);
-    expect(ownerCompleteRes.json().data.order.status).toBe('DEPOSIT_PAID');
+    const ownerCompleteRes = await request
+      .post('/api/v1/payments/mock/complete')
+      .set('authorization', `Bearer ${owner.token}`)
+      .send({ orderId: order.id, outcome: 'SUCCEEDED', amountVnd: order.depositDueVnd });
+    expect(ownerCompleteRes.status).toBe(200);
+    expect(ownerCompleteRes.body.data.order.status).toBe('DEPOSIT_PAID');
   });
 });

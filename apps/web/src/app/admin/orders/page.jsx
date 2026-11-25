@@ -36,7 +36,7 @@ export default function AdminOrdersPage() {
       if (orderNumberFilter.trim()) qs.set('orderNumber', orderNumberFilter.trim());
 
       const res = await apiRequest(`/api/v1/admin/orders?${qs.toString()}`);
-      const loaded = res.data ?? [];
+      const loaded = Array.isArray(res) ? res : [];
       setOrders(loaded);
       setSelectedOrder((prev) =>
         prev ? (loaded.find((item) => item.id === prev.id) ?? prev) : null
@@ -64,7 +64,7 @@ export default function AdminOrdersPage() {
           ...(internalNote.trim() ? { internalNote: internalNote.trim() } : {}),
         },
       });
-      const updated = res.data?.order;
+      const updated = res?.order;
       setFeedback(`${updated?.orderNumber || ''} -> ${nextStatus}`);
       setInternalNote('');
       if (updated) {

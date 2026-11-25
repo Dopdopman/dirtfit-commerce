@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import argon2 from 'argon2';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -274,5 +275,44 @@ describe('Phase 2 Database Constraints, Seed Integrity & Engine Integration', ()
     const json = JSON.stringify(evaluatedPayload);
     expect(typeof json).toBe('string');
     expect(JSON.parse(json)).toHaveLength(8);
+  });
+
+  it('enforces v2.0 SQL constraints on chat_sessions (chk_chat_session_owner) and oauth_accounts uniqueness', async () => {
+    await expect(
+      prisma.$executeRaw`
+        INSERT INTO chat_sessions (id, user_id, guest_token_hash, locale, expires_at, updated_at)
+        VALUES (gen_random_uuid(), NULL, NULL, 'en', NOW() + INTERVAL '1 day', NOW())
+      `
+    ).rejects.toMatchObject({ code: 'P2010' });
+
+    const customer = await prisma.user.findUnique({ where: { email: 'rider@dirtfit.vn' } });
+    expect(customer).toBeTruthy();
+
+    const uniqueSub = `db-constraint-sub-${crypto.randomUUID().slice(0, 8)}`;
+    const first = await prisma.oAuthAccount.create({
+      data: {
+        userId: customer.id,
+        provider: 'GOOGLE',
+        providerAccountId: uniqueSub,
+        providerEmail: `sub-${uniqueSub}@gmail.com`,
+        emailVerified: true,
+      },
+    });
+
+    try {
+      await expect(
+        prisma.oAuthAccount.create({
+          data: {
+            userId: customer.id,
+            provider: 'GOOGLE',
+            providerAccountId: uniqueSub,
+            providerEmail: `sub2-${uniqueSub}@gmail.com`,
+            emailVerified: true,
+          },
+        })
+      ).rejects.toMatchObject({ code: 'P2002' });
+    } finally {
+      await prisma.oAuthAccount.delete({ where: { id: first.id } });
+    }
   });
 });

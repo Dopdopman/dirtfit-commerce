@@ -34,7 +34,7 @@ export default function AdminTestRidesPage() {
       if (dateFilter) qs.set('date', dateFilter);
 
       const res = await apiRequest(`/api/v1/admin/test-rides?${qs.toString()}`);
-      setBookings(res.data ?? []);
+      setBookings(Array.isArray(res) ? res : []);
     } catch (err) {
       setError(localizeApiError(err, locale));
     } finally {

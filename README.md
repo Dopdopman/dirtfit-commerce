@@ -9,9 +9,10 @@ A specialized e-commerce platform for **Off-Road, Motocross, Enduro, Dual-Sport,
 ## Key Capabilities
 
 - **60fps 2D Rider Fit Simulator & Ghost Overlay:** Physics-backed suspension sag (`Static Sag` + `Rider Sag`), seat width & boot ankle-flexion ground reach (`FLAT_FOOT`, `BALLS_OF_FEET`, `TIP_TOE`, `ONE_FOOT_SHIFT`, `TOO_TALL_UNSAFE`), 2D analytical inverse kinematics (Seated & Standing Attack stances), side-by-side Ghost Overlay comparison (`/compare`), and smart accessory lowering bundle upsells.
+- **Grounded AI Support Chatbot (`SupportChatWidget.jsx`) & `@dirtfit/knowledge`:** Zero-hallucination grounded pipeline backed by local bilingual EN/VI BM25 policy retrieval, `CatalogCache`, and real `@dirtfit/ergonomics-engine` evaluations; supports Google Gemini Free Tier (`gemini-2.5-flash`) with instant `GroundedFallbackAdapter` protection, prompt-injection pre-filtering, clickable `/policies/*` citations, interactive Mini Fit Cards, and anonymous-to-authenticated session merge.
+- **Google OAuth 2.0 + OIDC & Security:** Authorization Code + PKCE S256 + encrypted `df_oauth_tx` cookie + 60s Redis One-Time Ticket cross-origin handoff, Argon2id password hashing, Refresh Token Rotation with family-wide Reuse Detection, in-memory JWT + Single-Flight Refresh Queue, 4KB Magic Bytes media inspection, RFC 7807 `application/problem+json` errors, and immutable `AuditLog`.
 - **High-Concurrency Inventory & Payments:** PostgreSQL `SELECT ... FOR UPDATE` row locking sorted deterministically to eliminate deadlocks, inline **Lazy Expiration** reclaiming expired 15-minute holds without waiting for cron, `Idempotency-Key` checkout protection, PayOS HMAC webhooks, COD eligibility guard (`<= 20,000,000 VND`, accessories only), and non-prod Mock payment adapter.
-- **Security & RBAC:** Argon2id password hashing, Refresh Token Rotation with family-wide Reuse Detection, in-memory JWT storage + Single-Flight Refresh Queue on the frontend, 4KB Magic Bytes verification for media uploads, RFC 7807 `application/problem+json` errors, and immutable `AuditLog`.
-- **Admin & Sales Portal (`/admin/*`):** Industrial Technical Dashboard, Bike & Geometry CRUD, **Interactive 6-Anchor UV Blueprint Calibration Tool** (with live 170cm rider SVG overlay & perspective distortion check), Compatibility Matrix editor, Order State Machine controls, 3-Showroom Test Ride scheduler, and `ADMIN`-only Audit Log diff viewer.
+- **Bilingual Storefront (EN Default / VI) & Admin Portal (`/admin/*`):** Cookie-persisted SSR + client EN/VI switching, Industrial Technical Dashboard, Bike & Geometry CRUD, **Interactive 6-Anchor UV Blueprint Calibration Tool**, Compatibility Matrix editor, Order State Machine controls, 3-Showroom Test Ride scheduler, and `ADMIN`-only Audit Log diff & anonymized Chat Metrics.
 
 ---
 
@@ -32,19 +33,23 @@ A specialized e-commerce platform for **Off-Road, Motocross, Enduro, Dual-Sport,
 
 ```text
 dirtfit-commerce/
-├── .github/workflows/          # ci.yml, cd.yml, sweeper-cron.yml
+├── .github/workflows/          # ci.yml (5 jobs), cd.yml, sweeper-cron.yml
 ├── apps/
 │   ├── api/                    # Fastify 5 API, Prisma schema/migrations, Dockerfile, entrypoint.mjs
-│   └── web/                    # Next.js 15 Storefront & /admin Portal, standalone Dockerfile
+│   └── web/                    # Next.js 15 Storefront, /policies/*, & /admin Portal, standalone Dockerfile
 ├── packages/
 │   ├── ergonomics-engine/      # Sag, foot contact, 2D IK kinematics & UV calibration math
+│   ├── knowledge/              # Bilingual EN/VI policy markdown docs, static manifest & BM25 retriever
 │   └── shared/                 # Shared enums, errors, VND BigInt/Number converters, Zod schemas
+├── tests/
+│   └── system/                 # Tier 3: Playwright Chromium E2E specs (Pure JS ESM)
 ├── docs/
 │   ├── DEPLOYMENT_FREE_TIER.md # Step-by-step $0/month production deployment & runbook
-│   └── architecture/           # Single Source of Truth master architecture docs (00–07)
+│   └── architecture/           # Single Source of Truth master architecture docs (00–11)
 ├── scripts/
 │   ├── check-pure-js.mjs       # Workspace guardrail blocking TypeScript artifacts
 │   └── smoke-stack.mjs         # Live full-stack HTTP & API integration smoke check
+├── playwright.config.mjs       # Tier 3 Playwright configuration (Chromium headless, workers: 1)
 ├── docker-compose.yml          # Local dev PostgreSQL 16 + Redis 7 + Adminer (--profile tools)
 ├── docker-compose.prod.yml     # 1-command full 4-container local production stack
 ├── render.yaml                 # Render Free Tier Docker service blueprint
@@ -112,7 +117,10 @@ pnpm dev
 | Command                                | Description                                                                  |
 | :------------------------------------- | :--------------------------------------------------------------------------- |
 | `pnpm dev`                             | Run Fastify API & Next.js Web concurrently in watch mode                     |
-| `pnpm test`                            | Run all Vitest unit & integration suites across all 4 packages (`67` tests)  |
+| `pnpm test:unit`                       | Tier 1: Run fast parallel unit tests across all 5 packages (0 DB/Redis)      |
+| `pnpm test:integration`                | Tier 2: Run sequential Supertest HTTP integration suites (Postgres + Redis)  |
+| `pnpm test:system`                     | Tier 3: Run 6 Playwright Chromium end-to-end specs against API + Web         |
+| `pnpm test`                            | Run Tier 1 (`test:unit`) + Tier 2 (`test:integration`)                       |
 | `pnpm check:pure-js`                   | Verify 100% Pure JavaScript ESM compliance across all files & `package.json` |
 | `pnpm lint`                            | Run ESLint with JSDoc, React, and React Hooks rules (zero warnings policy)   |
 | `pnpm format:check`                    | Verify Prettier formatting across workspace                                  |
@@ -126,4 +134,4 @@ pnpm dev
 
 - **\$0/Month Free Tier Deployment & Operations Guide:** [`docs/DEPLOYMENT_FREE_TIER.md`](./docs/DEPLOYMENT_FREE_TIER.md)
 - **Master Architecture Index:** [`docs/architecture/README.md`](./docs/architecture/README.md)
-- **Implementation Roadmap & DoD Checklists:** [`docs/architecture/07-implementation-roadmap.md`](./docs/architecture/07-implementation-roadmap.md)
+- **v2.0 Expansion Roadmap & DoD Checklists:** [`docs/architecture/11-v2-expansion-roadmap.md`](./docs/architecture/11-v2-expansion-roadmap.md)

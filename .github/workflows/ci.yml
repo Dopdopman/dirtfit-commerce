@@ -137,11 +137,115 @@ jobs:
       - run: pnpm --filter @dirtfit/api run db:generate
       - run: pnpm --filter @dirtfit/api run db:migrate:deploy
       - run: pnpm --filter @dirtfit/api run db:seed
-      - run: pnpm test
+      - name: Tier 1 — Run Unit Tests (Pure JS, 0 DB/Redis)
+        run: pnpm test:unit
+      - name: Tier 2 — Run Integration Tests (Vitest + Supertest)
+        run: pnpm test:integration
       - name: Build Next.js storefront & admin portal
         env:
           NODE_ENV: production
         run: pnpm --filter @dirtfit/web build
+
+  system-e2e:
+    name: System E2E Tests (Playwright Chromium)
+    needs: [guardrails]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dirtfit
+          POSTGRES_PASSWORD: dirtfit_ci_password
+          POSTGRES_DB: dirtfit_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dirtfit -d dirtfit_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      HOST: 127.0.0.1
+      APP_URL: http://localhost:3000
+      API_URL: http://localhost:4000
+      LOG_LEVEL: warn
+      SWAGGER_ENABLED: 'true'
+      DATABASE_URL: postgresql://dirtfit:dirtfit_ci_password@localhost:5432/dirtfit_db
+      DIRECT_URL: postgresql://dirtfit:dirtfit_ci_password@localhost:5432/dirtfit_db
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-test-jwt-access-secret-must-be-at-least-32-bytes-long-012345
+      JWT_ACCESS_TTL: 15m
+      REFRESH_TOKEN_TTL_DAYS: 14
+      REFRESH_TOKEN_PEPPER: ci-test-refresh-pepper-must-be-at-least-32-bytes-long-012345
+      COOKIE_SECRET: ci-test-cookie-secret-must-be-at-least-32-bytes-long-01234567
+      COOKIE_SAME_SITE: lax
+      COOKIE_SECURE: 'false'
+      CRON_HMAC_SECRET: ci-test-cron-hmac-secret-must-be-at-least-32-bytes-long-012345
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      RATE_LIMIT_GLOBAL_MAX: 1000
+      RATE_LIMIT_AUTH_MAX: 100
+      PAYMENT_DEFAULT_PROVIDER: MOCK
+      ENABLE_MOCK_PAYMENT: 'true'
+      MOCK_PAYMENT_WEBHOOK_SECRET: ci-mock-webhook-secret-123456
+      PAYOS_CHECKSUM_KEY: ci-payos-checksum-key-123456
+      RESERVATION_TTL_MINUTES: 15
+      STORAGE_DRIVER: local
+      GOOGLE_OAUTH_ENABLED: 'true'
+      ENABLE_MOCK_OAUTH: 'true'
+      GOOGLE_CALLBACK_URL: http://localhost:4000/api/v1/auth/google/callback
+      OAUTH_STATE_SECRET: ci-test-oauth-state-secret-must-be-at-least-32-bytes-long-012345
+      CHAT_PROVIDER: fallback
+      GEMINI_MODEL: gemini-2.5-flash
+      CHAT_TIMEOUT_MS: 12000
+      CHAT_RATE_LIMIT_MAX: 100
+      CHAT_GUEST_SESSION_TTL_DAYS: 7
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      INTERNAL_API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright Chromium binaries
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright Chromium & OS dependencies
+        run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm --filter @dirtfit/api run db:generate
+      - run: pnpm --filter @dirtfit/api run db:migrate:deploy
+      - run: pnpm --filter @dirtfit/api run db:seed
+      - name: Build Next.js storefront for System E2E
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @dirtfit/web build
+      - name: Tier 3 — Run Playwright System E2E Suite
+        run: pnpm test:system
+      - name: Upload Playwright report & failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   docker-build:
     name: Production Docker Build Verification

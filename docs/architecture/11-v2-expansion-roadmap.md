@@ -128,12 +128,12 @@ flowchart TD
      - Build và smoke-test lại cả 2 production image `apps/api/Dockerfile` & `apps/web/Dockerfile` qua `docker-compose.prod.yml` + `scripts/smoke-stack.mjs` (mở rộng smoke check kiểm tra thêm `/policies/ordering`, `/policies/terms`, `/api/v1/auth/providers`, `/api/v1/chat/session`, và xác nhận `mock-authorize` trả `404` ở production).
      - Cập nhật `docs/DEPLOYMENT_FREE_TIER.md` hướng dẫn từng bước tạo **Google Cloud Console OAuth 2.0 Client ID** và **Google AI Studio Gemini API Key Free Tier** + đồng bộ `render.yaml` và `apps/api/.env.example`.
 - **Definition of Done (DoD):**
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm audit --prod --audit-level=high` thoát mã `0`.
-  - [ ] `pnpm test:unit` pass 100% trong `< 5s` (không cần Docker Postgres/Redis).
-  - [ ] `pnpm test:integration` (Supertest) pass 100% liên tiếp 2 lần không flaky.
-  - [ ] `pnpm test:system` (Playwright Chromium, 6/6 E2E specs) pass 100%.
-  - [ ] `docker compose -f docker-compose.prod.yml up --build -d` đạt trạng thái `healthy` cả API & Web, `pnpm smoke` pass 100% bao gồm kiểm tra OAuth/Chatbot/Policies.
-  - [ ] Toàn bộ 5/5 jobs trên GitHub Actions (`ci.yml`) xanh 100%.
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm audit --prod --audit-level=high` thoát mã `0`.
+  - [x] `pnpm test:unit` pass 100% trong `< 5s` (không cần Docker Postgres/Redis).
+  - [x] `pnpm test:integration` (Supertest) pass 100% liên tiếp 2 lần không flaky.
+  - [x] `pnpm test:system` (Playwright Chromium, 6/6 E2E specs) pass 100%.
+  - [x] `docker compose -f docker-compose.prod.yml up --build -d` đạt trạng thái `healthy` cả API & Web, `pnpm smoke` pass 100% bao gồm kiểm tra OAuth/Chatbot/Policies.
+  - [ ] Toàn bộ 5/5 jobs trên GitHub Actions (`ci.yml`) xanh 100% *(đã cấu hình đủ 5/5 jobs trong `.github/workflows/ci.yml`, chờ user `git commit` & `git push` để kích hoạt run trên GitHub Actions)*.
 
 ---
 

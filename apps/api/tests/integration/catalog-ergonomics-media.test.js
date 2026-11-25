@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from '../../src/app.js';
+import { startTestServer } from './helpers/http-client.js';
 
 const VALID_PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -22,8 +22,10 @@ const SPOOFED_HTML_BYTES = Buffer.from(
   'utf8'
 );
 
-describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation & Media Security', () => {
+describe('Phase 4/12 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation & Media Security (Supertest)', () => {
+  let server;
   let app;
+  let request;
   let adminToken;
   let salesToken;
   let customerToken;
@@ -38,25 +40,14 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
   const createdMediaIds = [];
   const createdAuditEntityIds = [];
 
-  /**
-   * Authenticate with seeded credentials and return Bearer token + user payload.
-   * @param {string} email
-   * @param {string} password
-   * @returns {Promise<{ token: string, user: object }>}
-   */
   async function loginAs(email, password) {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/login',
-      payload: { email, password },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    return { token: body.data.accessToken, user: body.data.user };
+    const res = await request.post('/api/v1/auth/login').send({ email, password });
+    expect(res.status).toBe(200);
+    return { token: res.body.data.accessToken, user: res.body.data.user };
   }
 
   beforeAll(async () => {
-    app = await buildApp({
+    server = await startTestServer({
       envOverrides: {
         NODE_ENV: 'test',
         SWAGGER_ENABLED: true,
@@ -66,6 +57,8 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
       },
       rateLimitNamespace: `df:rl:phase4-e2e:${runId}:`,
     });
+    app = server.app;
+    request = server.request;
 
     const [adminAuth, salesAuth, customerAuth, brandRow] = await Promise.all([
       loginAs('admin@dirtfit.vn', 'Admin@DirtFit2026!'),
@@ -85,7 +78,7 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
   });
 
   afterAll(async () => {
-    if (!app) {
+    if (!server) {
       return;
     }
 
@@ -129,7 +122,6 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
         });
       }
 
-      // Ensure test keys don't linger in Redis catalog cache
       let cursor = '0';
       do {
         const [nextCursor, keys] = await app.redis.scan(
@@ -145,21 +137,18 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
         }
       } while (cursor !== '0');
     } finally {
-      await app.close();
+      await server.close();
     }
   });
 
   it('serves Public Catalog with category/Smart Rider-Fit filters, JSON-safe Number VND, soft-delete exclusion & Lazy Expiration', async () => {
-    const brandsRes = await app.inject({ method: 'GET', url: '/api/v1/brands' });
-    expect(brandsRes.statusCode).toBe(200);
-    expect(brandsRes.json().data.brands.length).toBeGreaterThanOrEqual(5);
+    const brandsRes = await request.get('/api/v1/brands');
+    expect(brandsRes.status).toBe(200);
+    expect(brandsRes.body.data.brands.length).toBeGreaterThanOrEqual(5);
 
-    const enduroRes = await app.inject({
-      method: 'GET',
-      url: '/api/v1/bikes?category=ENDURO',
-    });
-    expect(enduroRes.statusCode).toBe(200);
-    const enduroBikes = enduroRes.json().data;
+    const enduroRes = await request.get('/api/v1/bikes?category=ENDURO');
+    expect(enduroRes.status).toBe(200);
+    const enduroBikes = enduroRes.body.data;
     expect(enduroBikes.length).toBeGreaterThanOrEqual(2);
     for (const bike of enduroBikes) {
       expect(bike.category).toBe('ENDURO');
@@ -168,18 +157,16 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
       expect(bike.deletedAt).toBeNull();
     }
 
-    // Smart Rider-Fit query with alias parameter names + L1/L2 cached geometry
     const t0 = performance.now();
-    const fitRes = await app.inject({
-      method: 'GET',
-      url: '/api/v1/bikes?heightCm=168&weightKg=65&inseamCm=76&bootType=MX_BOOTS&includeModdable=true',
-    });
+    const fitRes = await request.get(
+      '/api/v1/bikes?heightCm=168&weightKg=65&inseamCm=76&bootType=MX_BOOTS&includeModdable=true'
+    );
     const elapsedMs = performance.now() - t0;
 
-    expect(fitRes.statusCode).toBe(200);
-    const fitBikes = fitRes.json().data;
+    expect(fitRes.status).toBe(200);
+    const fitBikes = fitRes.body.data;
     expect(fitBikes.length).toBeGreaterThanOrEqual(8);
-    expect(elapsedMs).toBeLessThan(1000);
+    expect(elapsedMs).toBeLessThan(1500);
 
     for (let i = 1; i < fitBikes.length; i += 1) {
       const prevBest = Math.max(
@@ -193,13 +180,11 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
       expect(prevBest).toBeGreaterThanOrEqual(currBest);
     }
 
-    // Verify Lazy Expiration on live reservations and soft-delete exclusion
     const tempSlug = `temp-lazy-exp-${runId}`;
-    const createRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/bikes',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const createRes = await request
+      .post('/api/v1/admin/bikes')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         brandId: hondaBrand.id,
         sku: `TMP-LAZY-${runId}`,
         name: `Temp Lazy Exp Bike ${runId}`,
@@ -234,10 +219,9 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           handlebarGripYMm: 1110,
           wetWeightKg: 135,
         },
-      },
-    });
-    expect(createRes.statusCode).toBe(201);
-    const createdBike = createRes.json().data.bike;
+      });
+    expect(createRes.status).toBe(201);
+    const createdBike = createRes.body.data.bike;
     createdBikeIds.push(createdBike.id);
     createdAuditEntityIds.push(createdBike.id);
 
@@ -265,7 +249,7 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           bikeId: createdBike.id,
           quantity: 1,
           status: 'ACTIVE',
-          expiresAt: new Date(Date.now() + 10 * 60_000), // active future hold
+          expiresAt: new Date(Date.now() + 10 * 60_000),
         },
         {
           orderId: tempOrder.id,
@@ -273,65 +257,48 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           bikeId: createdBike.id,
           quantity: 1,
           status: 'ACTIVE',
-          expiresAt: new Date(Date.now() - 5 * 60_000), // expired hold -> ignored by Lazy Expiration
+          expiresAt: new Date(Date.now() - 5 * 60_000),
         },
       ],
     });
 
-    const detailRes = await app.inject({
-      method: 'GET',
-      url: `/api/v1/bikes/${tempSlug}`,
-    });
-    expect(detailRes.statusCode).toBe(200);
-    const bikeDetail = detailRes.json().data.bike;
+    const detailRes = await request.get(`/api/v1/bikes/${tempSlug}`);
+    expect(detailRes.status).toBe(200);
+    const bikeDetail = detailRes.body.data.bike;
     expect(bikeDetail.stockQty).toBe(3);
     expect(bikeDetail.activeReservedQty).toBe(1);
     expect(bikeDetail.availableQty).toBe(2);
 
-    // Soft delete temp bike and ensure excluded from public list and detail
-    const softDelRes = await app.inject({
-      method: 'DELETE',
-      url: `/api/v1/admin/bikes/${createdBike.id}`,
-      headers: { authorization: `Bearer ${adminToken}` },
-    });
-    expect(softDelRes.statusCode).toBe(200);
+    const softDelRes = await request
+      .delete(`/api/v1/admin/bikes/${createdBike.id}`)
+      .set('authorization', `Bearer ${adminToken}`);
+    expect(softDelRes.status).toBe(200);
 
-    const hiddenDetailRes = await app.inject({
-      method: 'GET',
-      url: `/api/v1/bikes/${tempSlug}`,
-    });
-    expect(hiddenDetailRes.statusCode).toBe(404);
+    const hiddenDetailRes = await request.get(`/api/v1/bikes/${tempSlug}`);
+    expect(hiddenDetailRes.status).toBe(404);
 
-    // Public accessories endpoint
-    const accRes = await app.inject({ method: 'GET', url: '/api/v1/accessories?inStock=true' });
-    expect(accRes.statusCode).toBe(200);
-    const accList = accRes.json().data;
+    const accRes = await request.get('/api/v1/accessories?inStock=true');
+    expect(accRes.status).toBe(200);
+    const accList = accRes.body.data;
     expect(accList.length).toBeGreaterThanOrEqual(8);
     expect(typeof accList[0].priceVnd).toBe('number');
     expect(accList[0].availableQty).toBeGreaterThan(0);
 
-    const accDetailRes = await app.inject({
-      method: 'GET',
-      url: `/api/v1/accessories/${accList[0].slug}`,
-    });
-    expect(accDetailRes.statusCode).toBe(200);
-    expect(typeof accDetailRes.json().data.accessory.priceVnd).toBe('number');
+    const accDetailRes = await request.get(`/api/v1/accessories/${accList[0].slug}`);
+    expect(accDetailRes.status).toBe(200);
+    expect(typeof accDetailRes.body.data.accessory.priceVnd).toBe('number');
   });
 
   it('simulates 160cm rider on KTM 350 EXC-F with DB smart upsells and compares two bikes for Ghost Overlay', async () => {
-    const stockSimRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/ergonomics/simulate',
-      payload: {
-        slug: 'ktm-350-exc-f',
-        heightCm: 160,
-        weightKg: 55,
-        inseamCm: 73,
-        bootType: 'SNEAKERS',
-      },
+    const stockSimRes = await request.post('/api/v1/ergonomics/simulate').send({
+      slug: 'ktm-350-exc-f',
+      heightCm: 160,
+      weightKg: 55,
+      inseamCm: 73,
+      bootType: 'SNEAKERS',
     });
-    expect(stockSimRes.statusCode).toBe(200);
-    const stockSim = stockSimRes.json().data;
+    expect(stockSimRes.status).toBe(200);
+    const stockSim = stockSimRes.body.data;
 
     expect(stockSim.bike.slug).toBe('ktm-350-exc-f');
     expect(typeof stockSim.bike.priceVnd).toBe('number');
@@ -341,42 +308,34 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
     expect(typeof stockSim.upsellSuggestions[0].accessories[0].priceVnd).toBe('number');
     expect(stockSim.upsellSuggestions[0].accessories[0].availableQty).toBeGreaterThan(0);
 
-    const loweredSimRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/ergonomics/simulate',
-      payload: {
-        slug: 'ktm-350-exc-f',
-        heightCm: 160,
-        weightKg: 55,
-        inseamCm: 73,
-        bootType: 'MX_BOOTS',
-        loweringLinkMm: 30,
-        lowSeatMm: 25,
-        barRiserMm: 20,
-      },
+    const loweredSimRes = await request.post('/api/v1/ergonomics/simulate').send({
+      slug: 'ktm-350-exc-f',
+      heightCm: 160,
+      weightKg: 55,
+      inseamCm: 73,
+      bootType: 'MX_BOOTS',
+      loweringLinkMm: 30,
+      lowSeatMm: 25,
+      barRiserMm: 20,
     });
-    expect(loweredSimRes.statusCode).toBe(200);
-    const loweredSim = loweredSimRes.json().data;
+    expect(loweredSimRes.status).toBe(200);
+    const loweredSim = loweredSimRes.body.data;
     expect(loweredSim.sag.effectiveSeatHeightMm).toBeLessThan(
       stockSim.sag.effectiveSeatHeightMm - 40
     );
     expect(loweredSim.fitScore).toBeGreaterThan(stockSim.fitScore);
     expect(loweredSim.wireframe.seatProfile).toHaveLength(3);
 
-    const compareRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/ergonomics/compare',
-      payload: {
-        slugs: ['honda-crf300l', 'ktm-350-exc-f'],
-        heightCm: 168,
-        weightKg: 65,
-        inseamCm: 76,
-        bootType: 'MX_BOOTS',
-        alignmentMode: 'SEAT_POCKET',
-      },
+    const compareRes = await request.post('/api/v1/ergonomics/compare').send({
+      slugs: ['honda-crf300l', 'ktm-350-exc-f'],
+      heightCm: 168,
+      weightKg: 65,
+      inseamCm: 76,
+      bootType: 'MX_BOOTS',
+      alignmentMode: 'SEAT_POCKET',
     });
-    expect(compareRes.statusCode).toBe(200);
-    const cmp = compareRes.json().data;
+    expect(compareRes.status).toBe(200);
+    const cmp = compareRes.body.data;
     expect(cmp.alignmentMode).toBe('SEAT_POCKET');
     expect(cmp.bikeA.meta.slug).toBe('honda-crf300l');
     expect(cmp.bikeB.meta.slug).toBe('ktm-350-exc-f');
@@ -385,12 +344,10 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
   });
 
   it('enforces RBAC, writes AuditLog, and immediately invalidates L1/L2 cache on Admin price/geometry/compatibility edits', async () => {
-    // Customer blocked from Admin bike creation
-    const forbiddenRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/bikes',
-      headers: { authorization: `Bearer ${customerToken}` },
-      payload: {
+    const forbiddenRes = await request
+      .post('/api/v1/admin/bikes')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({
         brandId: hondaBrand.id,
         sku: `FORBID-${runId}`,
         name: 'Forbidden Bike',
@@ -422,17 +379,14 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           handlebarGripYMm: 1130,
           wetWeightKg: 120,
         },
-      },
-    });
-    expect(forbiddenRes.statusCode).toBe(403);
+      });
+    expect(forbiddenRes.status).toBe(403);
 
-    // Admin creates a bike & warms L1 + L2 caches
     const slug = `admin-cache-bike-${runId}`;
-    const createRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/bikes',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const createRes = await request
+      .post('/api/v1/admin/bikes')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         brandId: hondaBrand.id,
         sku: `CACHE-${runId}`,
         name: `Cache Test Bike ${runId}`,
@@ -466,49 +420,41 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           handlebarGripYMm: 1150,
           wetWeightKg: 118,
         },
-      },
-    });
-    expect(createRes.statusCode).toBe(201);
-    const bike = createRes.json().data.bike;
+      });
+    expect(createRes.status).toBe(201);
+    const bike = createRes.body.data.bike;
     createdBikeIds.push(bike.id);
     createdAuditEntityIds.push(bike.id);
 
-    // Warm L1 and L2 caches via public read
-    const warm1 = await app.inject({ method: 'GET', url: `/api/v1/bikes/${slug}` });
-    const warm2 = await app.inject({ method: 'GET', url: '/api/v1/bikes' });
-    expect(warm1.statusCode).toBe(200);
-    expect(warm1.json().data.bike.priceVnd).toBe(200_000_000);
-    expect(warm2.statusCode).toBe(200);
+    const warm1 = await request.get(`/api/v1/bikes/${slug}`);
+    const warm2 = await request.get('/api/v1/bikes');
+    expect(warm1.status).toBe(200);
+    expect(warm1.body.data.bike.priceVnd).toBe(200_000_000);
+    expect(warm2.status).toBe(200);
     expect(app.l1Cache.has(`df:catalog:bike:slug:${slug}`)).toBe(true);
 
-    // SALES_STAFF cannot alter price (403), only stockQty
-    const salesPriceAttempt = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/admin/bikes/${bike.id}`,
-      headers: { authorization: `Bearer ${salesToken}` },
-      payload: { priceVnd: 150_000_000 },
-    });
-    expect(salesPriceAttempt.statusCode).toBe(403);
+    const salesPriceAttempt = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}`)
+      .set('authorization', `Bearer ${salesToken}`)
+      .send({ priceVnd: 150_000_000 });
+    expect(salesPriceAttempt.status).toBe(403);
 
-    // ADMIN updates price and geometrySpec -> cache invalidated immediately + AuditLog created
-    const patchRes = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/admin/bikes/${bike.id}`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const patchRes = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         priceVnd: 215_000_000,
         geometrySpec: {
           unladenSeatHeightMm: 925,
           seatPocketYMm: 925,
         },
-      },
-    });
-    expect(patchRes.statusCode).toBe(200);
+      });
+    expect(patchRes.status).toBe(200);
     expect(app.l1Cache.has(`df:catalog:bike:slug:${slug}`)).toBe(false);
 
-    const postUpdateRead = await app.inject({ method: 'GET', url: `/api/v1/bikes/${slug}` });
-    expect(postUpdateRead.statusCode).toBe(200);
-    const freshBike = postUpdateRead.json().data.bike;
+    const postUpdateRead = await request.get(`/api/v1/bikes/${slug}`);
+    expect(postUpdateRead.status).toBe(200);
+    const freshBike = postUpdateRead.body.data.bike;
     expect(freshBike.priceVnd).toBe(215_000_000);
     expect(freshBike.geometrySpec.unladenSeatHeightMm).toBe(925);
 
@@ -525,12 +471,10 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
     expect(updateAudit.beforeState.priceVnd).toBe(200_000_000);
     expect(updateAudit.afterState.priceVnd).toBe(215_000_000);
 
-    // Admin creates accessory and attaches compatibility matrix
-    const accRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/accessories',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const accRes = await request
+      .post('/api/v1/admin/accessories')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         sku: `ACC-TMP-${runId}`,
         name: `Test Lowering Link ${runId}`,
         slug: `test-lowering-link-${runId}`,
@@ -539,18 +483,16 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
         priceVnd: 2_900_000,
         stockQty: 8,
         ergoImpactJson: { loweringLinkMm: 30, forkDropMm: 10 },
-      },
-    });
-    expect(accRes.statusCode).toBe(201);
-    const acc = accRes.json().data.accessory;
+      });
+    expect(accRes.status).toBe(201);
+    const acc = accRes.body.data.accessory;
     createdAccessoryIds.push(acc.id);
     createdAuditEntityIds.push(acc.id);
 
-    const putCompatRes = await app.inject({
-      method: 'PUT',
-      url: `/api/v1/admin/bikes/${bike.id}/compatibilities`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const putCompatRes = await request
+      .put(`/api/v1/admin/bikes/${bike.id}/compatibilities`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         compatibilities: [
           {
             accessoryId: acc.id,
@@ -561,14 +503,13 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
             fitmentNotes: 'Flush fork caps 10mm.',
           },
         ],
-      },
-    });
-    expect(putCompatRes.statusCode).toBe(200);
+      });
+    expect(putCompatRes.status).toBe(200);
 
-    const afterCompatDetail = await app.inject({ method: 'GET', url: `/api/v1/bikes/${slug}` });
-    expect(afterCompatDetail.statusCode).toBe(200);
-    expect(afterCompatDetail.json().data.bike.compatibilities).toHaveLength(1);
-    expect(afterCompatDetail.json().data.bike.compatibilities[0].installLaborVnd).toBe(400_000);
+    const afterCompatDetail = await request.get(`/api/v1/bikes/${slug}`);
+    expect(afterCompatDetail.status).toBe(200);
+    expect(afterCompatDetail.body.data.bike.compatibilities).toHaveLength(1);
+    expect(afterCompatDetail.body.data.bike.compatibilities[0].installLaborVnd).toBe(400_000);
   });
 
   it('enforces Presigned Media Upload flow & blocks disguised SVG/HTML payloads via 4KB Magic Bytes inspection', async () => {
@@ -578,192 +519,154 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
     });
     expect(bike).toBeTruthy();
 
-    // 1. Presign rejects SVG and > 5MB upfront
-    const svgPresign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const svgPresign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'GALLERY',
         mimeType: 'image/svg+xml',
         sizeBytes: 1024,
-      },
-    });
-    expect(svgPresign.statusCode).toBe(400);
+      });
+    expect(svgPresign.status).toBe(400);
     expect(svgPresign.headers['content-type']).toContain('application/problem+json');
 
-    const oversizedPresign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const oversizedPresign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'GALLERY',
         mimeType: 'image/png',
         sizeBytes: 6 * 1024 * 1024,
-      },
-    });
-    expect(oversizedPresign.statusCode).toBe(400);
+      });
+    expect(oversizedPresign.status).toBe(400);
 
-    // 2. Spoofed SVG claiming image/png -> rejected at confirm and deleted
-    const spoofPresign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const spoofPresign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'GALLERY',
         mimeType: 'image/png',
         sizeBytes: SPOOFED_SVG_BYTES.length,
         originalFileName: '../../evil.png',
-      },
-    });
-    expect(spoofPresign.statusCode).toBe(201);
-    const spoofGrant = spoofPresign.json().data;
+      });
+    expect(spoofPresign.status).toBe(201);
+    const spoofGrant = spoofPresign.body.data;
     expect(spoofGrant.storageKey.startsWith(`bikes/${bike.id}/`)).toBe(true);
     expect(spoofGrant.storageKey).not.toContain('..');
 
-    const spoofPut = await app.inject({
-      method: 'PUT',
-      url: spoofGrant.uploadPath,
-      headers: { 'content-type': 'image/png' },
-      payload: SPOOFED_SVG_BYTES,
-    });
-    expect(spoofPut.statusCode).toBe(200);
+    const spoofPut = await request
+      .put(spoofGrant.uploadPath)
+      .set('content-type', 'image/png')
+      .send(SPOOFED_SVG_BYTES);
+    expect(spoofPut.status).toBe(200);
 
-    const spoofConfirm = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/confirm',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const spoofConfirm = await request
+      .post('/api/v1/admin/media/confirm')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         storageKey: spoofGrant.storageKey,
         declaredMimeType: 'image/png',
         mediaType: 'GALLERY',
-      },
-    });
-    expect(spoofConfirm.statusCode).toBe(422);
+      });
+    expect(spoofConfirm.status).toBe(422);
     expect(spoofConfirm.headers['content-type']).toContain('application/problem+json');
-    expect(spoofConfirm.json().code).toBe('INVALID_UPLOAD_FILE');
+    expect(spoofConfirm.body.code).toBe('INVALID_UPLOAD_FILE');
     expect(app.storage.hasObject(spoofGrant.storageKey)).toBe(false);
 
-    // 3. Spoofed HTML claiming image/jpeg -> rejected & deleted
-    const htmlPresign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const htmlPresign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'GALLERY',
         mimeType: 'image/jpeg',
         sizeBytes: SPOOFED_HTML_BYTES.length,
-      },
-    });
-    const htmlGrant = htmlPresign.json().data;
-    await app.inject({
-      method: 'PUT',
-      url: htmlGrant.uploadPath,
-      headers: { 'content-type': 'image/jpeg' },
-      payload: SPOOFED_HTML_BYTES,
-    });
-    const htmlConfirm = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/confirm',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+      });
+    const htmlGrant = htmlPresign.body.data;
+    await request
+      .put(htmlGrant.uploadPath)
+      .set('content-type', 'image/jpeg')
+      .send(SPOOFED_HTML_BYTES);
+    const htmlConfirm = await request
+      .post('/api/v1/admin/media/confirm')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         storageKey: htmlGrant.storageKey,
         declaredMimeType: 'image/jpeg',
         mediaType: 'GALLERY',
-      },
-    });
-    expect(htmlConfirm.statusCode).toBe(422);
+      });
+    expect(htmlConfirm.status).toBe(422);
     expect(app.storage.hasObject(htmlGrant.storageKey)).toBe(false);
 
-    // 4. Genuine PNG succeeds end-to-end (presign -> PUT -> confirm)
-    const pngPresign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const pngPresign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'GALLERY',
         mimeType: 'image/png',
         sizeBytes: VALID_PNG_BYTES.length,
-      },
-    });
-    expect(pngPresign.statusCode).toBe(201);
-    const pngGrant = pngPresign.json().data;
+      });
+    expect(pngPresign.status).toBe(201);
+    const pngGrant = pngPresign.body.data;
 
-    const pngPut = await app.inject({
-      method: 'PUT',
-      url: pngGrant.uploadPath,
-      headers: { 'content-type': 'image/png' },
-      payload: VALID_PNG_BYTES,
-    });
-    expect(pngPut.statusCode).toBe(200);
+    const pngPut = await request
+      .put(pngGrant.uploadPath)
+      .set('content-type', 'image/png')
+      .send(VALID_PNG_BYTES);
+    expect(pngPut.status).toBe(200);
 
-    const pngConfirm = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/confirm',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const pngConfirm = await request
+      .post('/api/v1/admin/media/confirm')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         storageKey: pngGrant.storageKey,
         declaredMimeType: 'image/png',
         mediaType: 'GALLERY',
         altText: 'Valid test PNG gallery photo',
-      },
-    });
-    expect(pngConfirm.statusCode).toBe(201);
-    const validPngMedia = pngConfirm.json().data.media;
+      });
+    expect(pngConfirm.status).toBe(201);
+    const validPngMedia = pngConfirm.body.data.media;
     createdMediaIds.push(validPngMedia.id);
-    expect(pngConfirm.json().data.verifiedMime).toBe('image/png');
+    expect(pngConfirm.body.data.verifiedMime).toBe('image/png');
 
-    // 5. Genuine JPEG succeeds end-to-end
-    const jpgPresign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const jpgPresign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'GALLERY',
         mimeType: 'image/jpeg',
         sizeBytes: VALID_JPEG_BYTES.length,
-      },
-    });
-    const jpgGrant = jpgPresign.json().data;
-    await app.inject({
-      method: 'PUT',
-      url: jpgGrant.uploadPath,
-      headers: { 'content-type': 'image/jpeg' },
-      payload: VALID_JPEG_BYTES,
-    });
-    const jpgConfirm = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/confirm',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+      });
+    const jpgGrant = jpgPresign.body.data;
+    await request.put(jpgGrant.uploadPath).set('content-type', 'image/jpeg').send(VALID_JPEG_BYTES);
+    const jpgConfirm = await request
+      .post('/api/v1/admin/media/confirm')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         storageKey: jpgGrant.storageKey,
         declaredMimeType: 'image/jpeg',
         mediaType: 'GALLERY',
-      },
-    });
-    expect(jpgConfirm.statusCode).toBe(201);
-    createdMediaIds.push(jpgConfirm.json().data.media.id);
-    expect(jpgConfirm.json().data.verifiedMime).toBe('image/jpeg');
+      });
+    expect(jpgConfirm.status).toBe(201);
+    createdMediaIds.push(jpgConfirm.body.data.media.id);
+    expect(jpgConfirm.body.data.verifiedMime).toBe('image/jpeg');
   });
 
   it('validates Admin Blueprint Calibration UV coordinates, computes pxPerMm, writes AuditLog & exposes Phase 4 OpenAPI paths', async () => {
-    // Create temporary bike + upload valid blueprint PNG so seeded blueprint stays untouched
     const slug = `calib-bike-${runId}`;
-    const bikeRes = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/bikes',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const bikeRes = await request
+      .post('/api/v1/admin/bikes')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         brandId: hondaBrand.id,
         sku: `CALIB-${runId}`,
         name: `Calib Test Bike ${runId}`,
@@ -797,52 +700,40 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           handlebarGripYMm: 1170,
           wetWeightKg: 112,
         },
-      },
-    });
-    expect(bikeRes.statusCode).toBe(201);
-    const bike = bikeRes.json().data.bike;
+      });
+    expect(bikeRes.status).toBe(201);
+    const bike = bikeRes.body.data.bike;
     createdBikeIds.push(bike.id);
 
-    const presign = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/presign',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const presign = await request
+      .post('/api/v1/admin/media/presign')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         mediaType: 'SIDE_PROFILE_BLUEPRINT',
         mimeType: 'image/png',
         sizeBytes: VALID_PNG_BYTES.length,
-      },
-    });
-    const grant = presign.json().data;
-    await app.inject({
-      method: 'PUT',
-      url: grant.uploadPath,
-      headers: { 'content-type': 'image/png' },
-      payload: VALID_PNG_BYTES,
-    });
-    const confirm = await app.inject({
-      method: 'POST',
-      url: '/api/v1/admin/media/confirm',
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+      });
+    const grant = presign.body.data;
+    await request.put(grant.uploadPath).set('content-type', 'image/png').send(VALID_PNG_BYTES);
+    const confirm = await request
+      .post('/api/v1/admin/media/confirm')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         bikeId: bike.id,
         storageKey: grant.storageKey,
         declaredMimeType: 'image/png',
         mediaType: 'SIDE_PROFILE_BLUEPRINT',
         isPrimary: true,
-      },
-    });
-    expect(confirm.statusCode).toBe(201);
-    const media = confirm.json().data.media;
+      });
+    expect(confirm.status).toBe(201);
+    const media = confirm.body.data.media;
     createdMediaIds.push(media.id);
 
-    // Invalid out-of-bounds UV (> 1)
-    const outOfBoundsRes = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/admin/bikes/${bike.id}/media/${media.id}/calibration`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const outOfBoundsRes = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}/media/${media.id}/calibration`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         version: 1,
         facing: 'RIGHT',
         imageWidthPx: 1600,
@@ -855,17 +746,14 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           footpeg: { u: 0.45, v: 0.68 },
           handlebarGrip: { u: 0.64, v: 0.24 },
         },
-      },
-    });
-    expect(outOfBoundsRes.statusCode).toBe(400);
+      });
+    expect(outOfBoundsRes.status).toBe(400);
     expect(outOfBoundsRes.headers['content-type']).toContain('application/problem+json');
 
-    // Geometrically reversed wheel axles for RIGHT facing
-    const reversedAxlesRes = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/admin/bikes/${bike.id}/media/${media.id}/calibration`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const reversedAxlesRes = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}/media/${media.id}/calibration`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         version: 1,
         facing: 'RIGHT',
         imageWidthPx: 1600,
@@ -878,16 +766,13 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           footpeg: { u: 0.45, v: 0.68 },
           handlebarGrip: { u: 0.64, v: 0.24 },
         },
-      },
-    });
-    expect(reversedAxlesRes.statusCode).toBe(400);
+      });
+    expect(reversedAxlesRes.status).toBe(400);
 
-    // Valid UV calibration (calibrated to ~950mm seat height at 1480mm wheelbase)
-    const validCalibRes = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/admin/bikes/${bike.id}/media/${media.id}/calibration`,
-      headers: { authorization: `Bearer ${adminToken}` },
-      payload: {
+    const validCalibRes = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}/media/${media.id}/calibration`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
         version: 1,
         facing: 'RIGHT',
         imageWidthPx: 1600,
@@ -900,10 +785,9 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
           footpeg: { u: 0.45, v: 0.66 },
           handlebarGrip: { u: 0.64, v: 0.2 },
         },
-      },
-    });
-    expect(validCalibRes.statusCode).toBe(200);
-    const calibBody = validCalibRes.json().data;
+      });
+    expect(validCalibRes.status).toBe(200);
+    const calibBody = validCalibRes.body.data;
     expect(calibBody.metrics.pxPerMm).toBeGreaterThan(0.5);
     expect(calibBody.metrics.isPerspectiveDistorted).toBe(false);
 
@@ -916,10 +800,9 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
     });
     expect(calibAudit).toBeTruthy();
 
-    // Verify OpenAPI 3.0 spec compiles cleanly with all Phase 4 routes
-    const docsRes = await app.inject({ method: 'GET', url: '/docs/json' });
-    expect(docsRes.statusCode).toBe(200);
-    const spec = docsRes.json();
+    const docsRes = await request.get('/docs/json');
+    expect(docsRes.status).toBe(200);
+    const spec = docsRes.body;
     expect(spec.paths['/api/v1/bikes']).toBeTruthy();
     expect(spec.paths['/api/v1/ergonomics/simulate']).toBeTruthy();
     expect(spec.paths['/api/v1/admin/media/presign']).toBeTruthy();

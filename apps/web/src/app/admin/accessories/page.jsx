@@ -56,7 +56,7 @@ export default function AdminAccessoriesPage() {
       if (categoryFilter) qs.set('category', categoryFilter);
 
       const res = await apiRequest(`/api/v1/admin/accessories?${qs.toString()}`);
-      setItems(res.data ?? []);
+      setItems(Array.isArray(res) ? res : []);
     } catch (err) {
       setError(localizeApiError(err, locale));
     } finally {

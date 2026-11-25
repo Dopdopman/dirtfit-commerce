@@ -64,6 +64,11 @@
       "passThroughEnv": ["NEXT_PUBLIC_API_URL", "INTERNAL_API_URL", "NEXT_OUTPUT_STANDALONE"],
       "outputs": []
     },
+    "test:unit": {
+      "dependsOn": ["^test:unit"],
+      "passThroughEnv": ["NEXT_PUBLIC_API_URL", "INTERNAL_API_URL", "NEXT_OUTPUT_STANDALONE"],
+      "outputs": []
+    },
     "test:coverage": {
       "dependsOn": ["^test:coverage"],
       "passThroughEnv": ["NEXT_PUBLIC_API_URL", "INTERNAL_API_URL", "NEXT_OUTPUT_STANDALONE"],

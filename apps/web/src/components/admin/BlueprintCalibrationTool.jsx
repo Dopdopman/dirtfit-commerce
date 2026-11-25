@@ -204,7 +204,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
           originalFileName: file.name.slice(0, 180),
         },
       });
-      const presign = presignRes.data;
+      const presign = presignRes;
 
       const putRes = await fetch(presign.uploadUrl, {
         method: presign.method || 'PUT',
@@ -240,7 +240,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
         },
       });
 
-      const createdMedia = confirmRes.data?.media;
+      const createdMedia = confirmRes?.media;
       if (createdMedia?.id) {
         setLocalPreviewUrls((prev) => ({
           ...prev,
@@ -250,7 +250,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       }
 
       setUploadStatus(
-        `${confirmRes.data?.verifiedMime || declaredMime} · ${dims.widthPx}x${dims.heightPx}px`
+        `${confirmRes?.verifiedMime || declaredMime} · ${dims.widthPx}x${dims.heightPx}px`
       );
       await onBikeUpdated();
     } catch (err) {
@@ -276,7 +276,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
           body: calibrationPayload,
         }
       );
-      const savedMetrics = res.data?.metrics;
+      const savedMetrics = res?.metrics;
       setCalFeedback(
         savedMetrics
           ? `pxPerMm=${savedMetrics.pxPerMm} · perspectiveError=${savedMetrics.perspectiveErrorPercent}%`

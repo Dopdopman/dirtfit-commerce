@@ -10,7 +10,10 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "test": "turbo run test",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "pnpm --filter @dirtfit/api run test:integration",
+    "test:system": "playwright test",
     "test:coverage": "turbo run test:coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -22,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
+    "@playwright/test": "^1.65.1",
     "@vitest/coverage-v8": "3.2.7",
     "eslint": "9.39.5",
     "eslint-config-prettier": "10.1.8",
@@ -42,7 +46,8 @@
     },
     "overrides": {
       "postcss": ">=8.5.18",
-      "effect": ">=3.22.1 <4.0.0"
+      "effect": ">=3.22.1 <4.0.0",
+      "tinypool": ">=2.1.2"
     },
     "onlyBuiltDependencies": [
       "@prisma/client",

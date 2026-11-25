@@ -9,6 +9,8 @@ dist/
 build/
 coverage/
 out/
+playwright-report/
+test-results/
 
 # Environment variables (keep templates)
 .env

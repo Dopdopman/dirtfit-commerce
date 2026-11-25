@@ -36,9 +36,9 @@ export default function AdminDashboardPage() {
         apiRequest('/api/v1/admin/orders?limit=50'),
         apiRequest('/api/v1/admin/test-rides?limit=50'),
       ]);
-      setBikes(bikesRes.data ?? []);
-      setOrders(ordersRes.data ?? []);
-      setTestRides(ridesRes.data ?? []);
+      setBikes(Array.isArray(bikesRes) ? bikesRes : []);
+      setOrders(Array.isArray(ordersRes) ? ordersRes : []);
+      setTestRides(Array.isArray(ridesRes) ? ridesRes : []);
     } catch (err) {
       setError(localizeApiError(err, locale));
     } finally {

@@ -98,11 +98,11 @@ export default function AdminBikeDetailPage() {
     try {
       const [bikeRes, accRes] = await Promise.all([
         apiRequest(`/api/v1/admin/bikes/${bikeId}`),
-        apiRequest('/api/v1/admin/accessories?limit=100'),
+        apiRequest('/api/v1/admin/accessories?limit=50'),
       ]);
-      const loadedBike = bikeRes.data?.bike;
+      const loadedBike = bikeRes?.bike ?? null;
       setBike(loadedBike);
-      setAllAccessories(accRes.data ?? []);
+      setAllAccessories(Array.isArray(accRes) ? accRes : []);
       if (loadedBike) {
         hydrateForms(loadedBike);
       }

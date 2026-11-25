@@ -13,6 +13,8 @@ export default [
       '**/.turbo/**',
       '**/dist/**',
       '**/coverage/**',
+      'playwright-report/**',
+      'test-results/**',
       'apps/api/prisma/migrations/**',
     ],
   },
@@ -31,12 +33,19 @@ export default [
     },
   },
   {
-    files: ['apps/api/**/*.{js,mjs}', 'packages/**/*.{js,mjs}', 'scripts/**/*.mjs', '*.mjs'],
+    files: [
+      'apps/api/**/*.{js,mjs}',
+      'packages/**/*.{js,mjs}',
+      'scripts/**/*.mjs',
+      'tests/**/*.{js,mjs}',
+      '*.mjs',
+    ],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
       globals: {
         ...globals.node,
+        ...globals.browser,
       },
     },
     rules: {

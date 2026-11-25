@@ -211,7 +211,7 @@ export default function CheckoutPage() {
                   VietQR Payload: {paymentIntent.qrCodeData}
                 </div>
               )}
-              {process.env.NODE_ENV !== 'production' && (
+              {placedOrder.paymentMethod === 'MOCK' && (
                 <button
                   type="button"
                   disabled={completingMock}

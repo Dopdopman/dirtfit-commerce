@@ -3,5 +3,7 @@ node_modules
 .turbo
 dist
 coverage
+playwright-report
+test-results
 pnpm-lock.yaml
 docs/

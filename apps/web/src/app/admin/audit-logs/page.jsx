@@ -34,9 +34,11 @@ export default function AdminAuditLogsPage() {
       if (actionFilter.trim()) qs.set('action', actionFilter.trim());
       if (entityTypeFilter.trim()) qs.set('entityType', entityTypeFilter.trim());
 
-      const res = await apiRequest(`/api/v1/admin/audit-logs?${qs.toString()}`);
-      setLogs(res.data ?? []);
-      if (res.meta?.pagination) {
+      const res = await apiRequest(`/api/v1/admin/audit-logs?${qs.toString()}`, {
+        rawEnvelope: true,
+      });
+      setLogs(Array.isArray(res?.data) ? res.data : []);
+      if (res?.meta?.pagination) {
         setPagination(res.meta.pagination);
       }
     } catch (err) {

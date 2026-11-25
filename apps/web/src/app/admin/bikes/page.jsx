@@ -81,8 +81,8 @@ export default function AdminBikesPage() {
         apiRequest(`/api/v1/admin/bikes?${qs.toString()}`),
         apiRequest('/api/v1/brands'),
       ]);
-      setBikes(bikesRes.data ?? []);
-      const brandItems = brandsRes.data?.brands ?? [];
+      setBikes(Array.isArray(bikesRes) ? bikesRes : []);
+      const brandItems = brandsRes?.brands ?? [];
       setBrands(brandItems);
       if (brandItems.length > 0 && !form.brandId) {
         setForm((prev) => ({ ...prev, brandId: brandItems[0].id }));
