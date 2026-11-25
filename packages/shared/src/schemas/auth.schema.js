@@ -41,6 +41,23 @@ export const ResetPasswordSchema = z
   })
   .strict();
 
+export const OAuthExchangeSchema = z
+  .object({
+    ticket: z.string().trim().min(16).max(256),
+  })
+  .strict();
+
+export const SetPasswordSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .max(128)
+      .regex(/[A-Za-z]/, 'Password must include at least one letter')
+      .regex(/[0-9]/, 'Password must include at least one number'),
+  })
+  .strict();
+
 export const UpdateMeSchema = z
   .object({
     fullName: z.string().trim().min(2).max(120).optional(),

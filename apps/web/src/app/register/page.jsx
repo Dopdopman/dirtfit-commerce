@@ -4,13 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RegisterSchema } from '@dirtfit/shared';
+import GoogleAuthButton from '@/components/auth/GoogleAuthButton';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth } from '@/providers/AppProviders';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
- * Customer Registration Page validated with shared Zod RegisterSchema.
+ * Customer Registration Page validated with shared Zod RegisterSchema + Google OAuth option.
  * @returns {import('react').JSX.Element}
  */
 export default function RegisterPage() {
@@ -66,7 +67,11 @@ export default function RegisterPage() {
         </h1>
         <p className="mt-1 text-xs text-ink-secondary">{t('auth.registerSubtitle')}</p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="mt-6">
+          <GoogleAuthButton nextPath="/account" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-xs font-medium text-ink-secondary">
               {t('auth.fullNameLabel')}
@@ -105,12 +110,12 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-ink-secondary">
-              {t('auth.passwordLabel')} (&ge; 10)
+              {t('auth.passwordLabel')} (&ge; 8)
             </label>
             <input
               type="password"
               required
-              minLength={10}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-sm border border-line bg-canvas px-3 py-2 text-sm"

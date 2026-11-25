@@ -25,14 +25,26 @@ import {
  * @returns {object}
  */
 export function sanitizeUser(user) {
+  const oauthAccounts = Array.isArray(user.oauthAccounts)
+    ? user.oauthAccounts.map((acc) => ({
+        provider: acc.provider,
+        providerEmail: acc.providerEmail,
+        linkedAt: acc.linkedAt instanceof Date ? acc.linkedAt.toISOString() : acc.linkedAt,
+      }))
+    : [];
+
   const safe = {
     id: user.id,
     email: user.email,
     phone: user.phone ?? null,
     fullName: user.fullName,
+    avatarUrl: user.avatarUrl ?? null,
     role: user.role,
     isEmailVerified: user.isEmailVerified,
     isActive: user.isActive,
+    hasPassword: Boolean(user.passwordHash),
+    linkedProviders: oauthAccounts.map((acc) => acc.provider),
+    oauthAccounts,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
     createdAt: user.createdAt.toISOString(),
   };
@@ -78,7 +90,7 @@ function remainingAccessTtlSec(expEpochSec) {
  * @param {string} [familyId]
  * @returns {Promise<{ accessToken: string, rawRefreshToken: string, familyId: string }>}
  */
-async function issueSessionTokens(app, user, context, familyId = crypto.randomUUID()) {
+export async function issueSessionTokens(app, user, context, familyId = crypto.randomUUID()) {
   const jti = crypto.randomUUID();
   const accessToken = app.jwt.sign(
     {
@@ -161,6 +173,17 @@ export async function loginUser(app, input, context) {
     });
   }
 
+  // Case C: OAuth-only user without local password -> equalize timing with dummy Argon2 & reject cleanly
+  if (!user.passwordHash) {
+    await verifyDummyPassword(input.password);
+    throw new AppError({
+      code: ERROR_CODES.AUTH_OAUTH_ONLY_ACCOUNT,
+      status: 401,
+      title: 'Google sign-in required',
+      detail: 'This account uses Google Sign-In and does not have a local password yet.',
+    });
+  }
+
   const isValid = await verifyPassword(user.passwordHash, input.password);
   if (!isValid || !user.isActive) {
     throw new AppError({
@@ -172,9 +195,13 @@ export async function loginUser(app, input, context) {
   }
 
   const updatedUser = await touchUserLastLogin(app.prisma, user.id);
-  const session = await issueSessionTokens(app, updatedUser, context);
+  const hydratedUser = {
+    ...updatedUser,
+    oauthAccounts: user.oauthAccounts ?? [],
+  };
+  const session = await issueSessionTokens(app, hydratedUser, context);
   return {
-    user: sanitizeUser(updatedUser),
+    user: sanitizeUser(hydratedUser),
     accessToken: session.accessToken,
     rawRefreshToken: session.rawRefreshToken,
   };

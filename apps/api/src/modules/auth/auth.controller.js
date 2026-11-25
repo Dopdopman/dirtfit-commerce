@@ -1,3 +1,4 @@
+import { AppError, ERROR_CODES } from '@dirtfit/shared';
 import { sendSuccess } from '../../common/http/envelope.js';
 import { mergeGuestCartToUser } from '../cart/cart.repository.js';
 import {
@@ -8,6 +9,15 @@ import {
   registerUser,
   rotateRefreshSession,
 } from './auth.service.js';
+import { resolveGoogleOAuthAdapter } from './oauth/oauth.adapter.js';
+import {
+  OAUTH_TX_COOKIE_NAME,
+  OAUTH_TX_TTL_SECONDS,
+  exchangeOAuthTicket,
+  handleGoogleOAuthCallback,
+  setLocalPassword,
+  startGoogleOAuth,
+} from './oauth/oauth.service.js';
 
 export const REFRESH_COOKIE_NAME = 'df_refresh_token';
 const GUEST_CART_COOKIE_NAME = 'df_guest_cart';
@@ -59,6 +69,52 @@ function clearRefreshCookie(reply, env) {
 }
 
 /**
+ * Set short-lived encrypted OAuth transaction cookie (`df_oauth_tx`, SameSite=Lax for GET callback).
+ * @param {import('fastify').FastifyReply} reply
+ * @param {string} encryptedPayload
+ * @param {object} env
+ */
+function setOAuthTxCookie(reply, encryptedPayload, env) {
+  reply.setCookie(OAUTH_TX_COOKIE_NAME, encryptedPayload, {
+    httpOnly: true,
+    secure: env.COOKIE_SECURE,
+    sameSite: 'lax',
+    path: '/api/v1/auth/google',
+    maxAge: OAUTH_TX_TTL_SECONDS,
+  });
+}
+
+/**
+ * Clear the short-lived OAuth transaction cookie immediately upon callback receipt.
+ * @param {import('fastify').FastifyReply} reply
+ * @param {object} env
+ */
+function clearOAuthTxCookie(reply, env) {
+  reply.clearCookie(OAUTH_TX_COOKIE_NAME, {
+    httpOnly: true,
+    secure: env.COOKIE_SECURE,
+    sameSite: 'lax',
+    path: '/api/v1/auth/google',
+  });
+}
+
+/**
+ * Merge anonymous guest cart (and future guest chat session in Phase 11) into authenticated user.
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @param {string} userId
+ * @returns {Promise<void>}
+ */
+async function mergeGuestSessionsAfterAuth(request, reply, userId) {
+  const guestCartToken = request.cookies?.[GUEST_CART_COOKIE_NAME];
+  if (typeof guestCartToken === 'string' && guestCartToken.length > 0) {
+    await mergeGuestCartToUser(request.server.prisma, guestCartToken, userId);
+    reply.clearCookie(GUEST_CART_COOKIE_NAME, { path: '/api/v1' });
+  }
+  // Phase 11 hook: merge df_chat_guest cookie into user ChatSession here
+}
+
+/**
  * Handle POST /api/v1/auth/register.
  * @param {import('fastify').FastifyRequest} request
  * @param {import('fastify').FastifyReply} reply
@@ -66,6 +122,7 @@ function clearRefreshCookie(reply, env) {
  */
 export async function registerHandler(request, reply) {
   const result = await registerUser(request.server, request.body, buildRequestContext(request));
+  await mergeGuestSessionsAfterAuth(request, reply, result.user.id);
   setRefreshCookie(reply, result.rawRefreshToken, request.server.env);
   return sendSuccess(
     reply,
@@ -82,13 +139,132 @@ export async function registerHandler(request, reply) {
  */
 export async function loginHandler(request, reply) {
   const result = await loginUser(request.server, request.body, buildRequestContext(request));
-  const guestCartToken = request.cookies?.[GUEST_CART_COOKIE_NAME];
-  if (typeof guestCartToken === 'string' && guestCartToken.length > 0) {
-    await mergeGuestCartToUser(request.server.prisma, guestCartToken, result.user.id);
-    reply.clearCookie(GUEST_CART_COOKIE_NAME, { path: '/api/v1' });
-  }
+  await mergeGuestSessionsAfterAuth(request, reply, result.user.id);
   setRefreshCookie(reply, result.rawRefreshToken, request.server.env);
   return sendSuccess(reply, { user: result.user, accessToken: result.accessToken });
+}
+
+/**
+ * Handle GET /api/v1/auth/providers.
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<import('fastify').FastifyReply>}
+ */
+export async function authProvidersHandler(request, reply) {
+  const env = request.server.env;
+  return sendSuccess(reply, {
+    googleEnabled: Boolean(env.GOOGLE_OAUTH_ENABLED),
+    mockOAuthEnabled: env.NODE_ENV !== 'production' && Boolean(env.ENABLE_MOCK_OAUTH),
+  });
+}
+
+/**
+ * Handle GET /api/v1/auth/google and GET /api/v1/auth/google/start.
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<import('fastify').FastifyReply>}
+ */
+export async function googleOAuthStartHandler(request, reply) {
+  const { authorizationUrl, encryptedTxCookie } = startGoogleOAuth(request.server, request.query);
+  setOAuthTxCookie(reply, encryptedTxCookie, request.server.env);
+  return reply.redirect(authorizationUrl);
+}
+
+/**
+ * Handle GET /api/v1/auth/google/mock-authorize (mounted non-prod only when ENABLE_MOCK_OAUTH=true).
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<import('fastify').FastifyReply>}
+ */
+export async function googleOAuthMockAuthorizeHandler(request, reply) {
+  const env = request.server.env;
+  if (env.NODE_ENV === 'production' || !env.ENABLE_MOCK_OAUTH) {
+    throw new AppError({
+      code: ERROR_CODES.NOT_FOUND,
+      status: 404,
+      title: 'Mock OAuth disabled',
+      detail: 'Mock Google OAuth endpoint is disabled.',
+    });
+  }
+
+  const adapter = resolveGoogleOAuthAdapter(env);
+  const redirectTarget = adapter.buildMockCallbackRedirectUrl(request.query || {});
+  return reply.redirect(redirectTarget);
+}
+
+/**
+ * Handle GET /api/v1/auth/google/callback.
+ * Always clears df_oauth_tx; redirects browsers cleanly on error or returns RFC 7807 JSON to API clients.
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<import('fastify').FastifyReply>}
+ */
+export async function googleOAuthCallbackHandler(request, reply) {
+  const encryptedTxCookie = request.cookies?.[OAUTH_TX_COOKIE_NAME];
+  clearOAuthTxCookie(reply, request.server.env);
+
+  try {
+    const { ticket, returnTo } = await handleGoogleOAuthCallback(
+      request.server,
+      request.query,
+      encryptedTxCookie,
+      buildRequestContext(request)
+    );
+
+    const frontendBase = request.server.env.APP_URL.replace(/\/+$/, '');
+    const handoffUrl = new URL(`${frontendBase}/auth/callback`);
+    handoffUrl.searchParams.set('ticket', ticket);
+    handoffUrl.searchParams.set('next', returnTo);
+    return reply.redirect(handoffUrl.toString());
+  } catch (err) {
+    const acceptHeader = String(request.headers.accept || '');
+    if (acceptHeader.includes('text/html') && !acceptHeader.includes('application/json')) {
+      const frontendBase = request.server.env.APP_URL.replace(/\/+$/, '');
+      const errorCode = err instanceof AppError ? err.code : ERROR_CODES.OAUTH_ID_TOKEN_INVALID;
+      const loginErrorUrl = new URL(`${frontendBase}/login`);
+      loginErrorUrl.searchParams.set('oauthError', errorCode);
+      return reply.redirect(loginErrorUrl.toString());
+    }
+    throw err;
+  }
+}
+
+/**
+ * Handle POST /api/v1/auth/oauth/exchange.
+ * Exchanges single-use ticket for JWT + Refresh Cookie + merges guest cart/chat.
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<import('fastify').FastifyReply>}
+ */
+export async function oauthExchangeHandler(request, reply) {
+  const result = await exchangeOAuthTicket(
+    request.server,
+    request.body.ticket,
+    buildRequestContext(request)
+  );
+  await mergeGuestSessionsAfterAuth(request, reply, result.user.id);
+  setRefreshCookie(reply, result.rawRefreshToken, request.server.env);
+  return sendSuccess(reply, {
+    user: result.user,
+    accessToken: result.accessToken,
+    returnTo: result.returnTo,
+  });
+}
+
+/**
+ * Handle POST /api/v1/auth/set-password.
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<import('fastify').FastifyReply>}
+ */
+export async function setPasswordHandler(request, reply) {
+  const user = await setLocalPassword(
+    request.server,
+    request.authUser.id,
+    request.body.newPassword,
+    buildRequestContext(request)
+  );
+  return sendSuccess(reply, { user });
 }
 
 /**

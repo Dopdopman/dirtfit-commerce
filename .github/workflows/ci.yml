@@ -115,6 +115,10 @@ jobs:
       PAYOS_CHECKSUM_KEY: ci-payos-checksum-key-123456
       RESERVATION_TTL_MINUTES: 15
       STORAGE_DRIVER: local
+      GOOGLE_OAUTH_ENABLED: 'true'
+      ENABLE_MOCK_OAUTH: 'true'
+      GOOGLE_CALLBACK_URL: http://localhost:4000/api/v1/auth/google/callback
+      OAUTH_STATE_SECRET: ci-test-oauth-state-secret-must-be-at-least-32-bytes-long-012345
       NEXT_PUBLIC_API_URL: http://localhost:4000
       INTERNAL_API_URL: http://localhost:4000
     steps:

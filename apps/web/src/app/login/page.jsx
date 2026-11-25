@@ -1,16 +1,17 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LoginSchema } from '@dirtfit/shared';
+import GoogleAuthButton from '@/components/auth/GoogleAuthButton';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth } from '@/providers/AppProviders';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
- * Login form handling Argon2id API authentication and guest cart merge.
+ * Login form handling Argon2id API authentication, Google OAuth 2.0, and guest cart merge.
  * @returns {import('react').JSX.Element}
  */
 function LoginContent() {
@@ -23,6 +24,17 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const nextPath = searchParams.get('next');
+  const safeNext =
+    nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/account';
+  const oauthError = searchParams.get('oauthError');
+
+  useEffect(() => {
+    if (oauthError) {
+      setErrorMsg(localizeApiError({ code: oauthError }, locale));
+    }
+  }, [oauthError, locale]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,8 +49,6 @@ function LoginContent() {
     setSubmitting(true);
     try {
       await login(parsed.data);
-      const nextPath = searchParams.get('next');
-      const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : '/account';
       router.push(safeNext);
     } catch (err) {
       setErrorMsg(localizeApiError(err, locale));
@@ -61,7 +71,11 @@ function LoginContent() {
         </h1>
         <p className="mt-1.5 text-xs text-ink-secondary">{t('auth.loginSubtitle')}</p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="mt-6">
+          <GoogleAuthButton nextPath={safeNext} />
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-xs font-medium text-ink-secondary">
               {t('auth.emailLabel')}
@@ -90,7 +104,10 @@ function LoginContent() {
           </div>
 
           {errorMsg && (
-            <div className="border border-fit-unsafe/40 bg-red-50 px-3 py-2 text-xs text-fit-unsafe">
+            <div
+              role="alert"
+              className="border border-fit-unsafe/40 bg-red-50 px-3 py-2 text-xs text-fit-unsafe"
+            >
               {errorMsg}
             </div>
           )}

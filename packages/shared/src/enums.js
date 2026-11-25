@@ -6,6 +6,10 @@ export const USER_ROLES = Object.freeze({
   ADMIN: 'ADMIN',
 });
 
+export const OAUTH_PROVIDERS = Object.freeze({
+  GOOGLE: 'GOOGLE',
+});
+
 export const GENDERS = Object.freeze({
   MALE: 'MALE',
   FEMALE: 'FEMALE',

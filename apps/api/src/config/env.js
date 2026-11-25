@@ -61,8 +61,38 @@ const EnvSchema = z
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_BUCKET_NAME: z.string().min(1).default('dirtfit-media'),
     R2_PUBLIC_BASE_URL: z.string().url().default('https://cdn.dirtfit.vn'),
+
+    GOOGLE_OAUTH_ENABLED: BooleanStringSchema.default(false),
+    ENABLE_MOCK_OAUTH: BooleanStringSchema.default(false),
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_CALLBACK_URL: z.string().url().optional(),
+    OAUTH_STATE_SECRET: z.string().min(32).optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production' && env.ENABLE_MOCK_OAUTH) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ENABLE_MOCK_OAUTH'],
+        message: 'ENABLE_MOCK_OAUTH must be false in production',
+      });
+    }
+    if (env.GOOGLE_OAUTH_ENABLED && !env.ENABLE_MOCK_OAUTH) {
+      const requiredGoogleFields = [
+        'GOOGLE_CLIENT_ID',
+        'GOOGLE_CLIENT_SECRET',
+        'GOOGLE_CALLBACK_URL',
+      ];
+      for (const field of requiredGoogleFields) {
+        if (!env[field] || String(env[field]).trim().length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required when GOOGLE_OAUTH_ENABLED is true without mock OAuth`,
+          });
+        }
+      }
+    }
     if (env.NODE_ENV === 'production' && env.ENABLE_MOCK_PAYMENT) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -163,6 +193,12 @@ export function loadEnv(overrides = {}) {
     R2_SECRET_ACCESS_KEY: rawSource.R2_SECRET_ACCESS_KEY,
     R2_BUCKET_NAME: rawSource.R2_BUCKET_NAME,
     R2_PUBLIC_BASE_URL: rawSource.R2_PUBLIC_BASE_URL,
+    GOOGLE_OAUTH_ENABLED: rawSource.GOOGLE_OAUTH_ENABLED,
+    ENABLE_MOCK_OAUTH: rawSource.ENABLE_MOCK_OAUTH,
+    GOOGLE_CLIENT_ID: rawSource.GOOGLE_CLIENT_ID || undefined,
+    GOOGLE_CLIENT_SECRET: rawSource.GOOGLE_CLIENT_SECRET || undefined,
+    GOOGLE_CALLBACK_URL: rawSource.GOOGLE_CALLBACK_URL || undefined,
+    OAUTH_STATE_SECRET: rawSource.OAUTH_STATE_SECRET || undefined,
   };
 
   const parsed = EnvSchema.safeParse(candidate);

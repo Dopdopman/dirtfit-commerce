@@ -150,6 +150,10 @@ enum TestRideStatus {
   NO_SHOW
 }
 
+enum OAuthProvider {
+  GOOGLE
+}
+
 // ============================================================================
 // 1. AUTHENTICATION, USERS & BODY PROFILES
 // ============================================================================
@@ -159,7 +163,8 @@ model User {
   email             String            @unique @db.VarChar(255)
   phone             String?           @db.VarChar(20)
   fullName          String            @map("full_name") @db.VarChar(120)
-  passwordHash      String            @map("password_hash") @db.VarChar(255)
+  passwordHash      String?           @map("password_hash") @db.VarChar(255)
+  avatarUrl         String?           @map("avatar_url") @db.VarChar(512)
   role              UserRole          @default(CUSTOMER)
   isEmailVerified   Boolean           @default(false) @map("is_email_verified")
   isActive          Boolean           @default(true) @map("is_active")
@@ -169,6 +174,7 @@ model User {
   deletedAt         DateTime?         @map("deleted_at")
 
   refreshTokens     RefreshToken[]
+  oauthAccounts     OAuthAccount[]
   bodyProfiles      UserBodyProfile[]
   cart              Cart?
   orders            Order[]
@@ -179,6 +185,27 @@ model User {
   @@index([role, isActive])
   @@index([deletedAt])
   @@map("users")
+}
+
+model OAuthAccount {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  provider          OAuthProvider
+  providerAccountId String        @map("provider_account_id") @db.VarChar(128)
+  providerEmail     String        @map("provider_email") @db.VarChar(255)
+  emailVerified     Boolean       @default(true) @map("email_verified")
+  avatarUrl         String?       @map("avatar_url") @db.VarChar(512)
+  linkedAt          DateTime      @default(now()) @map("linked_at")
+  lastUsedAt        DateTime?     @map("last_used_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("oauth_accounts")
 }
 
 model RefreshToken {

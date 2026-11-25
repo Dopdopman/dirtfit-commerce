@@ -156,6 +156,38 @@ export default function AppProviders({ children }) {
     [refreshCart]
   );
 
+  const completeOAuthLogin = useCallback(
+    async (ticket) => {
+      const data = await apiRequest('/api/v1/auth/oauth/exchange', {
+        method: 'POST',
+        body: { ticket },
+        skipAuthRetry: true,
+      });
+      setAccessToken(data.accessToken);
+      const hydratedUser = await refreshUser();
+      const activeUser = hydratedUser ?? data.user;
+      const defaultProfile = activeUser?.bodyProfiles?.find((p) => p.isDefault);
+      if (defaultProfile) {
+        setRiderProfileState((prev) => ({
+          ...prev,
+          heightCm: defaultProfile.heightCm,
+          weightKg: defaultProfile.weightKg,
+          inseamCm: defaultProfile.inseamCm ?? null,
+          gender: defaultProfile.gender ?? prev.gender,
+          bodyProportion: defaultProfile.bodyProportion ?? prev.bodyProportion,
+          footwear: defaultProfile.footwear ?? prev.footwear,
+          ridingExperience: defaultProfile.ridingExperience ?? prev.ridingExperience,
+        }));
+      }
+      await refreshCart();
+      return {
+        user: activeUser,
+        returnTo: data.returnTo || '/account',
+      };
+    },
+    [refreshCart, refreshUser]
+  );
+
   const logout = useCallback(async () => {
     try {
       await apiRequest('/api/v1/auth/logout', { method: 'POST', body: {} });
@@ -224,6 +256,7 @@ export default function AppProviders({ children }) {
         authReady,
         login,
         register,
+        completeOAuthLogin,
         logout,
         refreshUser,
       }}

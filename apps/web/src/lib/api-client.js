@@ -215,7 +215,8 @@ export async function apiRequest(path, options = {}) {
     const isAuthEndpoint =
       path.includes('/auth/login') ||
       path.includes('/auth/register') ||
-      path.includes('/auth/refresh');
+      path.includes('/auth/refresh') ||
+      path.includes('/auth/oauth/exchange');
 
     if (response.status === 401 && !skipAuthRetry && !isAuthEndpoint) {
       const refreshedToken = await refreshAccessTokenSingleFlight(fetchImpl, baseUrl);

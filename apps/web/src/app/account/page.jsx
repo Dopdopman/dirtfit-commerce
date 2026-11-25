@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { SetPasswordSchema } from '@dirtfit/shared';
 import * as Tabs from '@radix-ui/react-tabs';
-import { LogOut, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, KeyRound, LogOut, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { apiRequest } from '@/lib/api-client';
 import {
   formatVnd,
@@ -12,11 +13,12 @@ import {
   getShowroomMeta,
   getTestRideStatusMeta,
 } from '@/lib/formatters';
+import { localizeApiError } from '@/lib/i18n/translate';
 import { useAuth, useRiderProfile } from '@/providers/AppProviders';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
- * Customer Account Hub: Body Profiles CRUD, Order Tracking & Cancellation, Test Ride Bookings.
+ * Customer Account Hub: Body Profiles CRUD, Sign-in Methods, Order Tracking & Test Rides.
  * @returns {import('react').JSX.Element}
  */
 export default function AccountPage() {
@@ -32,6 +34,10 @@ export default function AccountPage() {
   const [weightKg, setWeightKg] = useState(65);
   const [footwear, setFootwear] = useState('MX_BOOTS');
   const [statusMessage, setStatusMessage] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [settingPassword, setSettingPassword] = useState(false);
 
   const loadAccountData = useCallback(async () => {
     if (!user) return;
@@ -86,6 +92,33 @@ export default function AccountPage() {
       body: {},
     });
     await loadAccountData();
+  };
+
+  const handleSetLocalPassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordStatus('');
+
+    const parsed = SetPasswordSchema.safeParse({ newPassword });
+    if (!parsed.success) {
+      setPasswordError(parsed.error.issues[0]?.message || t('common.errorGeneric'));
+      return;
+    }
+
+    setSettingPassword(true);
+    try {
+      await apiRequest('/api/v1/auth/set-password', {
+        method: 'POST',
+        body: parsed.data,
+      });
+      await refreshUser();
+      setNewPassword('');
+      setPasswordStatus(t('account.passwordSetSuccess'));
+    } catch (err) {
+      setPasswordError(localizeApiError(err, locale));
+    } finally {
+      setSettingPassword(false);
+    }
   };
 
   if (!authReady) {
@@ -267,6 +300,94 @@ export default function AccountPage() {
               <span>{t('account.saveProfileBtn')}</span>
             </button>
           </form>
+
+          {/* Linked Sign-in Methods & Local Password Management */}
+          <div className="border border-line bg-canvas p-5 lg:col-span-12">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                <ShieldCheck className="h-4 w-4 text-signal" />
+                <span>{t('account.signInMethodsTitle')}</span>
+              </div>
+              <span className="font-mono text-[11px] text-ink-muted">{user.email}</span>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="flex items-center justify-between border border-line bg-surface p-4">
+                <div>
+                  <div className="text-sm font-semibold text-ink">
+                    {t('account.googleMethodLabel')}
+                  </div>
+                  <div className="mt-0.5 text-xs text-ink-secondary">
+                    {user.linkedProviders?.includes('GOOGLE')
+                      ? user.oauthAccounts?.find((a) => a.provider === 'GOOGLE')?.providerEmail ||
+                        user.email
+                      : t('account.googleNotLinked')}
+                  </div>
+                </div>
+                {user.linkedProviders?.includes('GOOGLE') ? (
+                  <span className="inline-flex items-center gap-1 rounded-sm border border-fit-flat/30 bg-green-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-fit-flat">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>{t('account.connectedBadge')}</span>
+                  </span>
+                ) : (
+                  <span className="rounded-sm border border-line bg-canvas px-2 py-0.5 font-mono text-[11px] text-ink-muted">
+                    {t('account.notLinkedBadge')}
+                  </span>
+                )}
+              </div>
+
+              <div className="border border-line bg-surface p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                    <KeyRound className="h-3.5 w-3.5 text-ink-secondary" />
+                    <span>{t('account.passwordMethodLabel')}</span>
+                  </div>
+                  <span
+                    className={`rounded-sm px-2 py-0.5 font-mono text-[11px] font-semibold ${
+                      user.hasPassword
+                        ? 'border border-fit-flat/30 bg-green-50 text-fit-flat'
+                        : 'border border-fit-balls/30 bg-amber-50 text-fit-balls'
+                    }`}
+                  >
+                    {user.hasPassword
+                      ? t('account.configuredBadge')
+                      : t('account.notConfiguredBadge')}
+                  </span>
+                </div>
+
+                {!user.hasPassword && (
+                  <form
+                    onSubmit={handleSetLocalPassword}
+                    className="mt-3 flex flex-col gap-2 sm:flex-row"
+                  >
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder={t('account.setPasswordPlaceholder')}
+                      className="flex-1 rounded-sm border border-line bg-canvas px-3 py-1.5 text-xs focus:border-line-strong focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={settingPassword}
+                      className="rounded-sm bg-ink px-3 py-1.5 text-xs font-bold text-surface hover:bg-signal disabled:opacity-50"
+                    >
+                      {settingPassword ? t('account.settingPassword') : t('account.setPasswordBtn')}
+                    </button>
+                  </form>
+                )}
+
+                {passwordStatus && (
+                  <div className="mt-2 text-xs font-medium text-fit-flat">{passwordStatus}</div>
+                )}
+                {passwordError && (
+                  <div className="mt-2 text-xs text-fit-unsafe">{passwordError}</div>
+                )}
+              </div>
+            </div>
+          </div>
         </Tabs.Content>
 
         <Tabs.Content value="orders" className="space-y-4 p-6">

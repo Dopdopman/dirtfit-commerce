@@ -74,10 +74,10 @@ flowchart TD
      - Khu vực **Sign-in Methods & Set Local Password** trên `apps/web/src/app/account/page.jsx`.
   5. **Tests:** `apps/api/tests/unit/oauth-crypto.test.js` và `apps/api/tests/integration/oauth-google.test.js` phủ toàn bộ Cases A–G + Production `404` gating.
 - **Definition of Done (DoD):**
-  - [ ] `pnpm --filter @dirtfit/api run db:validate && pnpm --filter @dirtfit/api run db:generate` sạch lỗi.
-  - [ ] `pnpm audit --prod --audit-level=high` thoát mã `0` (không có cảnh báo high/critical mới sau khi thêm `jose`).
-  - [ ] Unit test `oauth-crypto.test.js` và Integration test `oauth-google.test.js` pass 100% (bao gồm Case B giữ nguyên role `ADMIN`, Case C dummy Argon2, Open Redirect block, Ticket replay `401`, Production mock `404`).
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm test` thoát mã `0`.
+  - [x] `pnpm --filter @dirtfit/api run db:validate && pnpm --filter @dirtfit/api run db:generate` sạch lỗi.
+  - [x] `pnpm audit --prod --audit-level=high` thoát mã `0` (không có cảnh báo high/critical mới sau khi thêm `jose`).
+  - [x] Unit test `oauth-crypto.test.js` và Integration test `oauth-google.test.js` pass 100% (bao gồm Case B giữ nguyên role `ADMIN`, Case C dummy Argon2, Open Redirect block, Ticket replay `401`, Production mock `404`).
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm test` thoát mã `0`.
 
 ---
 
