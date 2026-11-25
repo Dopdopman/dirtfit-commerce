@@ -25,4 +25,5 @@ jobs:
             --retry-delay 10 \
             -X POST "${API_BASE_URL%/}/api/v1/internal/sweeper/expire-reservations" \
             -H "X-Cron-Secret: ${CRON_HMAC_SECRET}" \
-            -H "Content-Type: application/json"
+            -H "Content-Type: application/json" \
+            -d '{}'
