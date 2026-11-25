@@ -300,3 +300,14 @@ graph LR
 - **`@dirtfit/ergonomics-engine` never imports `api`, `web`, or `prisma`** — keeping browser bundle overhead minimal (`< 12 KB` gzipped) and enabling 100% pure unit testing.
 - **`@dirtfit/shared`** may import physical range constants from `ergonomics-engine` to keep min/max bounds (e.g. `heightCm: 135..220`, `weightKg: 35..160`) strictly synchronized across physics formulas, frontend forms, and API validators.
 - **Turborepo Pipeline (`turbo.json`)**: `lint`, `test`, `test:coverage`, and `build` run in parallel with dependency-aware caching (`^test`, `^build`); `pnpm dev` runs `apps/api` (`node --watch`) and `apps/web` (Next.js Turbopack) concurrently.
+
+---
+
+## 6. v2.0 Expansion Delta (Phases 9 → 12)
+
+Để bảo toàn **Single Source of Truth** cho giai đoạn mở rộng `v2.0` (không thay đổi 4-layer Clean Architecture hay ràng buộc 100% Pure JS ESM):
+- **Internal Package mới:** `packages/knowledge` (`@dirtfit/knowledge`, zero external deps) lưu kho tài liệu chính sách/FAQ song ngữ EN/VI dùng chung cho cả `apps/api` (Chatbot BM25 Retriever) và `apps/web` (trang `/policies/*`), tương thích trọn vẹn với `turbo prune --docker` và Next.js `output: 'standalone'`. Xem [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md).
+- **Mở rộng Backend (`apps/api/src/modules/`):**
+  - Bổ sung `modules/auth/oauth/` (Google OAuth 2.0 + OIDC `jose` JWKS + `MockGoogleOAuthAdapter` + One-Time Ticket Exchange). Xem [08-google-oauth-architecture.md](./08-google-oauth-architecture.md).
+  - Thêm mới `modules/chatbot/` kèm thư mục `prompts/*.md` tách riêng (Intent Router, Local BM25 Retriever, Live `CatalogCache` + `@dirtfit/ergonomics-engine` Grounding, `GeminiChatAdapter` + `GroundedFallbackAdapter`). Xem [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md).
+- **Kiến trúc Kiểm thử 3 Tầng:** Bổ sung `tests/system/` (Playwright Pure JS ESM), nâng cấp `apps/api/tests/integration/` sang **Supertest** (`port: 0`), và tách `apps/api/tests/unit/`. Xem [10-testing-pyramid-unit-integration-system.md](./10-testing-pyramid-unit-integration-system.md) và [11-v2-expansion-roadmap.md](./11-v2-expansion-roadmap.md).

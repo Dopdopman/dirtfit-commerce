@@ -292,3 +292,15 @@ INTERNAL_API_URL=http://localhost:4000
 
 > **Cross-Origin Cookie Note (Vercel + Render/Koyeb):**  
 > To avoid third-party cookie blocking in Safari/Chrome for `HttpOnly` Refresh Cookies, bind subdomains under one root domain (`dirtfit.vn` → Vercel, `api.dirtfit.vn` → Render/Koyeb, `cdn.dirtfit.vn` → R2) with `SameSite=Lax; Domain=.dirtfit.vn; Secure; HttpOnly`. If deployed temporarily on separate domains (`*.vercel.app` and `*.onrender.com`), configure `SameSite=None; Secure; HttpOnly` paired with strict CSRF `Origin`/`Referer` verification on the backend.
+
+---
+
+## 6. v2.0 DevOps, Docker, CI/CD & Free Tier Delta
+
+- **Đóng gói Knowledge Base & Prompts (`apps/api/Dockerfile` & `apps/web/Dockerfile`):**
+  - Kho tài liệu chính sách nằm trong workspace package `@dirtfit/knowledge` (`packages/knowledge/content/{en,vi}/*.md`) dùng manifest tĩnh `new URL(..., import.meta.url)` kèm `outputFileTracingIncludes` trong `apps/web/next.config.mjs` → `turbo prune --docker`, Next.js `output: 'standalone'`, và Vercel Serverless Functions đóng gói 100% không thiếu file.
+  - Prompt templates nằm tại `apps/api/src/modules/chatbot/prompts/*.md` → tự động đi kèm trong bước `COPY /app/apps/api ./apps/api` của `apps/api/Dockerfile`.
+- **CI/CD v2.0 (`.github/workflows/ci.yml` & `sweeper-cron.yml`):**
+  - Bổ sung job thứ 5 **`system-e2e`** chạy bộ Playwright Chromium (`pnpm test:system`) với cache `~/.cache/ms-playwright` và tự động upload `playwright-report/` + trace khi fail (chi tiết tại [10-testing-pyramid-unit-integration-system.md](./10-testing-pyramid-unit-integration-system.md)).
+  - Giữ nguyên cổng `pnpm audit --prod --audit-level=high`, Trivy FS scan pin theo commit SHA, và mở rộng `sweeper-cron.yml` dọn `ChatSession` guest hết hạn.
+- **Biến môi trường & Dịch vụ Free Tier mới:** Bổ sung 10 biến Google OAuth + Gemini API vào `env.js`, `turbo.json`, `.env.example`, `render.yaml`, `docker-compose.prod.yml` và hướng dẫn cấu hình từng bước trong [11-v2-expansion-roadmap.md](./11-v2-expansion-roadmap.md) & `docs/DEPLOYMENT_FREE_TIER.md` (Phase 12).

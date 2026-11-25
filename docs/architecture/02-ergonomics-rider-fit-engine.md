@@ -304,3 +304,9 @@ When `evaluateBikeFit(rider, bike, compatibleAccessories)` runs:
 | Missing `calibrationData` (`null`) | Automatically falls back to **Parametric Wireframe Blueprint SVG** generated purely from the 6 millimeter anchors (accurate wheel diameters, `rakeDeg` forks, swingarm, seat, bars). |
 | Excessive lowering drops ground clearance < 200 mm | Emits `LOW_GROUND_CLEARANCE_WARNING` flag for honest off-road guidance. |
 | Golden Real-World Benchmarks | `real-world-bikes.test.js` asserts effective seat height predictions within `±8mm` across **KTM 350 EXC-F**, **Honda CRF300L**, and **Yamaha Ténéré 700**. |
+
+---
+
+## 7. v2.0 Expansion Delta — Live Grounding cho AI Support Chatbot
+
+Từ `v2.0` (Phase 11), `evaluateBikeFit()` trong `@dirtfit/ergonomics-engine` tiếp tục giữ nguyên trạng thái **0 external dependencies** và được `apps/api/src/modules/chatbot/chatbot.grounding.js` gọi trực tiếp phía server khi người dùng hỏi tư vấn chọn xe theo vóc dáng (`heightCm`, `weightKg`, `inseamCm`, `footwear`). Kết quả thật (`effectiveSeatHeightMm`, `riderSagMm`, `contactStatus`, `fitScore`, `upsellSuggestions`) được tiêm vào ngữ cảnh LLM và trả về dạng structured `recommendedBikes[]` cho UI Chatbot — bảo đảm **zero hallucination** cho mọi con số công thái học. Xem chi tiết tại [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md).

@@ -143,3 +143,12 @@ Enables Admins to calibrate any side-profile photo in `< 60 seconds`:
   - **Single-Flight Refresh Queue:** On `401 TOKEN_EXPIRED`, executes `/api/v1/auth/refresh` once across concurrent requests and replays queued calls.
   - Parses **RFC 7807** errors into field-level form messages.
   - **Cold-Start Friendly Banner:** Displays a non-blocking progress notice (*"Waking data server..."*) with exponential backoff if Render Free Tier takes >3s on cold start.
+
+---
+
+## 7. v2.0 UX, i18n & Storefront Expansion Delta
+
+- **Bilingual Storefront Standard (đã triển khai từ cuối `v1.0.0`):** Ngôn ngữ mặc định là **English (`en`)** kèm chuyển đổi tức thì sang **Tiếng Việt (`vi`)** qua cookie `dirtfit_locale` (`en` | `vi`), đồng bộ SSR `cookies()` + Client `I18nProvider` không lỗi Hydration Mismatch.
+- **Public Policy Pages (Phase 9 — [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):** Bổ sung 3 tuyến đường `/policies/ordering`, `/policies/terms`, `/policies/warranty` đọc trực tiếp từ `@dirtfit/knowledge` kèm Sticky TOC và liên kết trong `SiteFooter.jsx`.
+- **Google OAuth UI (Phase 10 — [08-google-oauth-architecture.md](./08-google-oauth-architecture.md)):** Bổ sung nút `Continue with Google / Tiếp tục với Google` trên `/login` & `/register`, trang handoff `/auth/callback`, và thẻ `Sign-in Methods & Set Local Password` trên `/account`.
+- **AI Support Chat Widget (Phase 11 — [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):** Gắn `<SupportChatWidget />` trong `StorefrontShell.jsx` (tự động ẩn trên `/admin/*`), thiết kế Technical Drawer Anti-AI-Slop với Quick Prompts EN/VI, Safe Structured Renderer (zero raw HTML), Citation Chips và Mini Fit Recommendation Card.

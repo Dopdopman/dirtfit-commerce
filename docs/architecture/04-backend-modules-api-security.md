@@ -293,3 +293,11 @@ Registered Adapters:
      - **Lazy Expiration Test:** Expired reservation (`expiresAt < NOW()`) is reclaimed inline by a new checkout without waiting for cron.
      - Idempotency Replay (`201` cached) & Payload Mismatch (`422`) tests.
      - RBAC & IDOR tests (`403` across users/roles) + Webhook signature forgery (`401`) & replay idempotency tests.
+
+---
+
+## 7. v2.0 API, Security & Testing Expansion Delta
+
+- **Google OAuth 2.0 & Account Linking ([08-google-oauth-architecture.md](./08-google-oauth-architecture.md)):** Bổ sung `/api/v1/auth/google/start`, `/api/v1/auth/google/callback`, `/api/v1/auth/google/mock-authorize` (chỉ mount ở non-prod khi `ENABLE_MOCK_OAUTH=true`, trả `404` ở production), `/api/v1/auth/oauth/exchange` (One-Time Ticket `60s` + merge `df_guest_cart` & `df_chat_guest`), `/api/v1/auth/set-password`, `/api/v1/auth/providers`. Mở rộng Pino `redact.paths` che `idToken`, `codeVerifier`, `clientSecret`, `oauthCode`, `ticket`.
+- **AI Support Chatbot ([09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):** Bổ sung `/api/v1/chat/session` (`GET`/`DELETE`), `/api/v1/chat/messages` (`POST`, rate limit `15/min`), `/api/v1/chat/messages/:id/feedback` (`POST`, anti-IDOR), và `/api/v1/admin/chat/metrics` (`GET`, ẩn danh zero-PII). Áp dụng đầy đủ phòng thủ **OWASP LLM Top 10**.
+- **Nâng cấp Kiểm thử 3 Tầng ([10-testing-pyramid-unit-integration-system.md](./10-testing-pyramid-unit-integration-system.md)):** Nâng cấp toàn bộ integration test của `apps/api` từ `app.inject()` sang HTTP thực qua **Supertest** (`app.listen({ port: 0, host: '127.0.0.1' })`, chạy tuần tự `fileParallelism: false`), tách riêng `tests/unit/` và bổ sung tầng 3 **Playwright System E2E**.

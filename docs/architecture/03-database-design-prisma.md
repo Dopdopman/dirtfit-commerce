@@ -750,3 +750,16 @@ Free-tier GitHub Actions cron schedules can be delayed by 5–15 minutes. Theref
   7. **Yamaha Ténéré 700** (Adventure, 689cc, 875 mm seat, 220 mm seat width, 210/200 mm travel, 204 kg)
   8. **Honda CRF250R** (Motocross, 249cc, 960 mm seat, 310/313 mm travel, 102 kg wet)
 - **Compatible Accessories (`BikeAccessoryCompatibility`):** Lowering links (-25mm / -30mm), Low seats (-20mm / -25mm), Bar risers (+30mm), and MX Boots (`APPAREL` — COD-eligible).
+
+---
+
+## 7. v2.0 Schema Expansion Delta (17 → 20 Models, Expand-and-Contract)
+
+Các migration mở rộng ở Phase 10 và Phase 11 bổ sung hoàn toàn tương thích ngược với 17 bảng `v1.0.0`:
+- **Phase 10 — Google OAuth 2.0 ([08-google-oauth-architecture.md](./08-google-oauth-architecture.md)):**
+  - Cập nhật `User`: `passwordHash String?` (nullable cho tài khoản thuần OAuth) và `avatarUrl String?`.
+  - Thêm enum `AuthProvider { GOOGLE }` và bảng `OAuthAccount` (`oauth_accounts`) với `@@unique([provider, providerAccountId])`, `@@unique([userId, provider])` cùng SQL `CHECK` không cho phép chuỗi rỗng.
+- **Phase 11 — AI Support Chatbot ([09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):**
+  - Thêm enums `ChatMessageRole`, `ChatFeedback`, `ChatIntent`.
+  - Thêm 2 bảng `ChatSession` (`chat_sessions`, hỗ trợ `userId` hoặc `guestTokenHash` kèm SQL `CHECK (user_id IS NOT NULL OR guest_token_hash IS NOT NULL)`) và `ChatMessage` (`chat_messages`, lưu `intent`, `citationsJson`, `recommendedBikesJson`, `provider`, `latencyMs`, `feedback`).
+  - Sweeper cron 15 phút được mở rộng dọn định kỳ các `chat_sessions` ẩn danh đã hết hạn (`user_id IS NULL AND expires_at <= NOW()`).

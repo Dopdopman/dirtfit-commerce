@@ -163,3 +163,13 @@ flowchart TD
   - [x] Both production Docker images build cleanly, run as non-root (`id -u !== 0`), and report `healthy`.
   - [x] GitHub Actions `pr-check.yml` passes 100% (Pure-JS guard + Lint + Unit/Integration tests + Prisma Validate + Docker Build + Trivy Scan).
   - [x] Production environment passes live smoke tests (`/health/ready` `200`, HTTPS/TLS, Cookie Auth, R2 CDN assets, sandbox payment webhook).
+
+---
+
+## v2.0 Expansion Phases (Phase 9 → Phase 12)
+
+Sau cột mốc `v1.0.0` (Phase 0 → Phase 8 hoàn tất 100%, CI/CD xanh 4/4 jobs, 70/70 tests passed), lộ trình mở rộng `v2.0` tiếp nối bằng 4 Phase mới được đặc tả đầy đủ tại **[11-v2-expansion-roadmap.md](./11-v2-expansion-roadmap.md)**:
+- **Phase 9:** Kho tài liệu `@dirtfit/knowledge` song ngữ EN/VI, hệ thống Prompt Governance (`prompts/*.md`) và 3 trang chính sách `/policies/{ordering,terms,warranty}`.
+- **Phase 10:** Google OAuth 2.0 + OIDC (`jose` JWKS) + Account Linking + One-Time Ticket Exchange + Mock OAuth Adapter.
+- **Phase 11:** AI Support Chatbot Full-Stack (Local BM25 + Live `CatalogCache` + `@dirtfit/ergonomics-engine` + Gemini/Fallback Adapters + `SupportChatWidget.jsx`).
+- **Phase 12:** Kiểm thử 3 tầng (`Vitest` Unit + `Supertest` Integration + `Playwright` System E2E), Docker & CI/CD `v2.0` + cập nhật `docs/DEPLOYMENT_FREE_TIER.md`.
