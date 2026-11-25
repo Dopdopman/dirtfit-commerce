@@ -301,3 +301,17 @@ Registered Adapters:
 - **Google OAuth 2.0 & Account Linking ([08-google-oauth-architecture.md](./08-google-oauth-architecture.md)):** Bổ sung `/api/v1/auth/google/start`, `/api/v1/auth/google/callback`, `/api/v1/auth/google/mock-authorize` (chỉ mount ở non-prod khi `ENABLE_MOCK_OAUTH=true`, trả `404` ở production), `/api/v1/auth/oauth/exchange` (One-Time Ticket `60s` + merge `df_guest_cart` & `df_chat_guest`), `/api/v1/auth/set-password`, `/api/v1/auth/providers`. Mở rộng Pino `redact.paths` che `idToken`, `codeVerifier`, `clientSecret`, `oauthCode`, `ticket`.
 - **AI Support Chatbot ([09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):** Bổ sung `/api/v1/chat/session` (`GET`/`DELETE`), `/api/v1/chat/messages` (`POST`, rate limit `15/min`), `/api/v1/chat/messages/:id/feedback` (`POST`, anti-IDOR), và `/api/v1/admin/chat/metrics` (`GET`, ẩn danh zero-PII). Áp dụng đầy đủ phòng thủ **OWASP LLM Top 10**.
 - **Nâng cấp Kiểm thử 3 Tầng ([10-testing-pyramid-unit-integration-system.md](./10-testing-pyramid-unit-integration-system.md)):** Nâng cấp toàn bộ integration test của `apps/api` từ `app.inject()` sang HTTP thực qua **Supertest** (`app.listen({ port: 0, host: '127.0.0.1' })`, chạy tuần tự `fileParallelism: false`), tách riêng `tests/unit/` và bổ sung tầng 3 **Playwright System E2E**.
+
+---
+
+## 8. v2.1 API, Media Lifecycle & Rich Cart/Order Expansion Delta
+
+Chi tiết đặc tả tại [12-real-product-media-and-rich-cart.md](./12-real-product-media-and-rich-cart.md) (triển khai ở Phase 13A):
+- **Bike Real Photo Management (`/api/v1/admin/bikes/:id/media/*`, `ADMIN` only, giữ nguyên alias cũ `/admin/media/{presign,confirm}`):**
+  - Bổ sung `POST .../presign`, `POST .../confirm` (tự động phân vùng key `bikes/<bikeId>/(photos|blueprint|specs)/<uuid>.<ext>`, 4KB Magic Bytes check, transactional `isPrimary` theo đúng miền media), `PATCH .../:mediaId/primary`, `PATCH .../reorder`, `DELETE .../:mediaId` (soft-delete + auto-promote cover kế tiếp + best-effort R2 delete), và chặn `PATCH .../calibration` trên media khác `SIDE_PROFILE_BLUEPRINT`.
+- **Accessory R2 Media Management (`/api/v1/admin/accessories/:id/media/*`, `ADMIN` only):**
+  - Bổ sung `POST .../presign` (key `accessories/<accessoryId>/<uuid>.<ext>`, `<= 5MB`), `POST .../confirm` (4KB Magic Bytes + dọn object cũ best-effort + `AuditLog` + `invalidateCatalogCache`), và `DELETE .../media`.
+- **Non-Prod Local Media Preview (`GET /api/v1/media/local/*`):** Chỉ mount khi `STORAGE_DRIVER === 'local' && NODE_ENV !== 'production'` (validate regex key chống path traversal, header `X-Content-Type-Options: nosniff`); trả **`404`** tuyệt đối ở production.
+- **Catalog, Cart, Order & Chatbot Contract Enrichment:**
+  - `GET /api/v1/bikes` & `GET /api/v1/bikes/:slug` bổ sung `coverImageUrl`, `coverImageKind`, `primaryPhoto`, `galleryImages[]`, `blueprintImageUrl`, `primaryBlueprint` (dùng chung `resolveBikeMedia()` từ `@dirtfit/shared`, giữ nguyên `media[]`).
+  - `GET /api/v1/cart` (bỏ `take: 2` trên `bike.media`), `GET /api/v1/orders*`, và Chatbot `recommendedBikes[]` trả đồng bộ `productUrl` (`/bikes/[slug]` | `/accessories?sku=...`), `imageUrl`, `imageKind`.

@@ -763,3 +763,15 @@ Các migration mở rộng ở Phase 10 và Phase 11 bổ sung hoàn toàn tươ
   - Thêm enums `ChatMessageRole`, `ChatFeedback`, `ChatIntent`.
   - Thêm 2 bảng `ChatSession` (`chat_sessions`, hỗ trợ `userId` hoặc `guestTokenHash` kèm SQL `CHECK (user_id IS NOT NULL OR guest_token_hash IS NOT NULL)`) và `ChatMessage` (`chat_messages`, lưu `intent`, `citationsJson`, `recommendedBikesJson`, `provider`, `latencyMs`, `feedback`).
   - Sweeper cron 15 phút được mở rộng dọn định kỳ các `chat_sessions` ẩn danh đã hết hạn (`user_id IS NULL AND expires_at <= NOW()`).
+
+---
+
+## 8. v2.1 Schema Expansion Delta (Zero-Downtime Real Product Media)
+
+Migration additive tại Phase 13A ([12-real-product-media-and-rich-cart.md](./12-real-product-media-and-rich-cart.md), [13-v21-media-cart-roadmap.md](./13-v21-media-cart-roadmap.md)) mở rộng hoàn toàn tương thích ngược trên Neon PostgreSQL production (giữ nguyên 20 model):
+- **Partial Unique Index độc lập cho Ảnh bìa thật Xe máy (`bike_media`):**
+  - Chạy CTE chống trùng `ROW_NUMBER()` trên các bản ghi `media_type IN ('HERO', 'GALLERY') AND is_primary = true AND deleted_at IS NULL` trước khi tạo index để tránh tuyệt đối lỗi `23505` với dữ liệu production hiện có.
+  - Tạo mới `uq_bike_single_primary_photo ON bike_media (bike_id) WHERE media_type IN ('HERO', 'GALLERY') AND is_primary = true AND deleted_at IS NULL` — hoàn toàn trực giao và **không ảnh hưởng** tới `uq_bike_single_primary_blueprint` cũ.
+- **Theo dõi R2 Storage Key cho Phụ kiện (`accessories`):**
+  - Thêm cột nullable `imageStorageKey String? @map("image_storage_key") @db.VarChar(255)` trên model `Accessory` (bên cạnh `imageUrl` đã có) nhằm hỗ trợ dọn object cũ trên Cloudflare R2 best-effort khi Admin thay/xóa ảnh mà không cần JOIN thêm bảng phụ.
+- **Snapshot Media trong `order_items.metadata_json`:** Không thêm cột mới; tận dụng cột `metadata_json` hiện hữu để lưu snapshot `{ slug, productUrl, imageUrl, imageKind }` tại thời điểm checkout, kết hợp join nhẹ sang `bike`/`accessory` cho các đơn hàng lịch sử.

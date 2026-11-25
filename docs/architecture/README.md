@@ -4,13 +4,13 @@
 > **Core Engineering Constraint:** **100% Pure JavaScript (ES Modules / ESM)** — zero TypeScript (`.ts`, `.tsx`, `tsconfig.json`). Uses **JSDoc** for type hints and **Zod (`.strict()`)** for runtime validation + OpenAPI 3.0 generation.  
 > **Storefront Localization:** Full bilingual **EN / VI** (English default via `dirtfit_locale` cookie, SSR + Client hydration-safe).  
 > **Target Infrastructure Budget:** **\$0/month** (Free Tier Production Architecture).  
-> **Current Status:** **v1.0.0 Complete** (Phases 0–8 verified, 4/4 GitHub Actions CI jobs green, 70/70 tests passed) — **Expansion Master Plan v2.0 (Phases 9–12) Approved for Execution**.
+> **Current Status:** **v2.0.0 Live in Production** (Phases 0–12 verified on Neon + Upstash + R2 + Render + Vercel, 6/6 GitHub Actions CI/CD checks green, 107/107 tests passed) — **Expansion Master Plan v2.1 (Phases 13A–13C) Drafted for Review**.
 
 ---
 
 ## Architecture Specification Index
 
-All implementation phases strictly follow the 11 specification documents below (`01`–`07` for `v1.0.0` core; `08`–`11` for `v2.0` expansion):
+All implementation phases strictly follow the 13 specification documents below (`01`–`07` for `v1.0.0` core; `08`–`11` for `v2.0` expansion; `12`–`13` for `v2.1` Real Product Media & Rich Cart UX):
 
 ### Core Platform Specifications (`v1.0.0` — Phases 0 → 8)
 
@@ -33,6 +33,13 @@ All implementation phases strictly follow the 11 specification documents below (
 | **10** | [10-testing-pyramid-unit-integration-system.md](./10-testing-pyramid-unit-integration-system.md) | **Kiến trúc Kiểm thử 3 Tầng (Pure JS ESM):** Tầng 1 **Unit (`Vitest`)**, Tầng 2 **Integration (`Vitest` + `Supertest` qua HTTP socket `port: 0`, tuần tự)**, Tầng 3 **System / E2E (`Playwright` Chromium — 6 kịch bản hộp đen `tests/system/`)**, chuẩn hóa scripts root và job `system-e2e` trên GitHub Actions. |
 | **11** | [11-v2-expansion-roadmap.md](./11-v2-expansion-roadmap.md) | Lộ trình triển khai **Phase 9 → Phase 12**, đồ thị phụ thuộc, **Definition of Done (DoD)** kiểm chứng tự động từng Phase, bảng đồng bộ 10 biến môi trường mới, hướng dẫn cấu hình **Google Cloud Console OAuth** & **Google AI Studio Gemini Free Tier**, và Risk Register `v2.0`. |
 
+### Expansion Master Plan (`v2.1` — Phases 13A → 13C)
+
+| # | Document | Scope & Core Contents |
+| :-: | :--- | :--- |
+| **12** | [12-real-product-media-and-rich-cart.md](./12-real-product-media-and-rich-cart.md) | **Hệ thống Ảnh thật Xe máy & Phụ kiện + Rich Cart UX (`v2.1`):** Tách bạch hoàn toàn Ảnh thật bán hàng (`HERO`/`GALLERY` với Partial Unique Index `uq_bike_single_primary_photo`) khỏi `SIDE_PROFILE_BLUEPRINT`, Fallback Hierarchy thống nhất trong `@dirtfit/shared`, upload ảnh Phụ kiện (`Accessory.imageStorageKey`) qua Cloudflare R2 (`Presign -> PUT -> 4KB Magic Bytes`), non-prod local media preview (`/api/v1/media/local/*`), làm giàu Cart/Order/Chatbot kèm Deep-Link (`/bikes/[slug]`, `/accessories?sku=...`), Admin Media Portal UX và ma trận test 3 tầng. |
+| **13** | [13-v21-media-cart-roadmap.md](./13-v21-media-cart-roadmap.md) | Lộ trình triển khai **Phase 13A → Phase 13C**, đồ thị phụ thuộc, **Definition of Done (DoD)** tự động từng sub-phase, quy trình Zero-Downtime Migration trên Neon production, và Risk Register `v2.1`. |
+
 ---
 
 ## Key Architecture Decision Records (ADR Highlights)
@@ -47,3 +54,5 @@ All implementation phases strictly follow the 11 specification documents below (
 8. **Google OAuth 2.0 PKCE + Encrypted `df_oauth_tx` Cookie + One-Time Ticket Exchange (`v2.0`):** Keeps OAuth initiation at **0 Upstash commands**, prevents token leakage in URLs across `*.vercel.app` ↔ `*.onrender.com`, verifies Google `id_token` via zero-dep `jose` JWKS (`email_verified === true`), and auto-merges Guest Cart + Guest Chat on exchange.
 9. **Zero-Hallucination Grounded AI Chatbot + Shared `@dirtfit/knowledge` (`v2.0`):** Bundles bilingual policy docs inside a workspace package with static `new URL(..., import.meta.url)` manifest + `outputFileTracingIncludes` (100% safe for `turbo prune --docker` & Vercel standalone), runs local BM25 (`< 2MB` RAM) + live `CatalogCache` + `@dirtfit/ergonomics-engine`, and pairs `GeminiChatAdapter` with deterministic `GroundedFallbackAdapter`.
 10. **3-Tier Pure-JS Testing Pyramid (`v2.0`):** Separates ultra-fast **Unit (`Vitest`)**, real-socket sequential **Integration (`Vitest` + `Supertest`)**, and full-stack browser **System E2E (`Playwright` Chromium)** with dedicated CI job and zero paid API keys.
+11. **Dual-Domain Motorcycle Media & Accessory R2 Lifecycle (`v2.1`):** Isolates commercial photos (`HERO`/`GALLERY`, protected by `uq_bike_single_primary_photo` with pre-index deduplication CTE) from 2D `SIDE_PROFILE_BLUEPRINT` calibration, adds `Accessory.imageStorageKey` for best-effort R2 cleanup, centralizes `resolveBikeMedia()` in `@dirtfit/shared`, and pairs `onError` wireframe/SKU fallback so zero broken images ever appear.
+12. **Rich Cart, Checkout & Order Deep-Link Parity (`v2.1`):** Enriches `cart.items[].product` and `order.items[]` with deterministic `imageUrl`, `imageKind`, and `productUrl` (`/bikes/[slug]` and `/accessories?sku=...`), supported by an SSR-safe `?sku` highlight filter on `/accessories` and non-prod local media serving (`/api/v1/media/local/*`, strictly `404` in production) for end-to-end Playwright image verification.

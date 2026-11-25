@@ -304,3 +304,13 @@ INTERNAL_API_URL=http://localhost:4000
   - Bổ sung job thứ 5 **`system-e2e`** chạy bộ Playwright Chromium (`pnpm test:system`) với cache `~/.cache/ms-playwright` và tự động upload `playwright-report/` + trace khi fail (chi tiết tại [10-testing-pyramid-unit-integration-system.md](./10-testing-pyramid-unit-integration-system.md)).
   - Giữ nguyên cổng `pnpm audit --prod --audit-level=high`, Trivy FS scan pin theo commit SHA, và mở rộng `sweeper-cron.yml` dọn `ChatSession` guest hết hạn.
 - **Biến môi trường & Dịch vụ Free Tier mới:** Bổ sung 10 biến Google OAuth + Gemini API vào `env.js`, `turbo.json`, `.env.example`, `render.yaml`, `docker-compose.prod.yml` và hướng dẫn cấu hình từng bước trong [11-v2-expansion-roadmap.md](./11-v2-expansion-roadmap.md) & `docs/DEPLOYMENT_FREE_TIER.md` (Phase 12).
+
+---
+
+## 7. v2.1 R2 Media CORS, Zero-Downtime Migration & Smoke Check Delta
+
+Chi tiết tại [12-real-product-media-and-rich-cart.md](./12-real-product-media-and-rich-cart.md) và [13-v21-media-cart-roadmap.md](./13-v21-media-cart-roadmap.md) (triển khai ở Phase 13A–13C):
+- **Cloudflare R2 CORS & Presigned PUT Compatibility:** Giữ nguyên chữ ký `PutObjectCommand` trong `r2.adapter.js` chỉ ký header `ContentType` để tương thích 100% với chính sách CORS hiện hữu (`AllowedMethods: ["GET", "PUT", "HEAD"]`, `AllowedHeaders: ["Content-Type"]`, bổ sung khuyến nghị `ExposeHeaders: ["ETag"]`) cho cả ảnh xe máy và ảnh phụ kiện.
+- **Zero-Downtime Migration trên Neon (`cd.yml`):** Migration `20261126000000_v21_product_media` tự chạy CTE dọn trùng `is_primary` trước khi tạo `uq_bike_single_primary_photo` và chỉ thêm 1 cột nullable `accessories.image_storage_key` — an toàn tuyệt đối khi `cd.yml` áp migration trước khi khởi động container API mới.
+- **Production Security Gate & Smoke Check (`scripts/smoke-stack.mjs --expect-prod`):** Mở rộng kiểm chứng `/api/v1/bikes` có đầy đủ contract media mới (`coverImageKind`, `galleryImages`, `blueprintImageUrl`), xác nhận `/api/v1/media/local/*` trả **`404`** khi `NODE_ENV=production`, và kiểm tra HTTP `200` cho `/cart` cùng `/accessories?sku=ACC-ZETA-LINK-30`.
+- **Playwright CI (`ci.yml`):** Job `system-e2e` tự động chạy thêm spec thứ 7 (`tests/system/07-media-gallery-and-rich-cart.spec.js`) dùng `STORAGE_DRIVER=local` (không cần credential R2 trên GitHub Actions).

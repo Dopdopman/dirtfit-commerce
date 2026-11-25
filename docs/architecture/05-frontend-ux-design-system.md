@@ -152,3 +152,20 @@ Enables Admins to calibrate any side-profile photo in `< 60 seconds`:
 - **Public Policy Pages (Phase 9 — [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):** Bổ sung 3 tuyến đường `/policies/ordering`, `/policies/terms`, `/policies/warranty` đọc trực tiếp từ `@dirtfit/knowledge` kèm Sticky TOC và liên kết trong `SiteFooter.jsx`.
 - **Google OAuth UI (Phase 10 — [08-google-oauth-architecture.md](./08-google-oauth-architecture.md)):** Bổ sung nút `Continue with Google / Tiếp tục với Google` trên `/login` & `/register`, trang handoff `/auth/callback`, và thẻ `Sign-in Methods & Set Local Password` trên `/account`.
 - **AI Support Chat Widget (Phase 11 — [09-ai-chatbot-knowledge-prompts.md](./09-ai-chatbot-knowledge-prompts.md)):** Gắn `<SupportChatWidget />` trong `StorefrontShell.jsx` (tự động ẩn trên `/admin/*`), thiết kế Technical Drawer Anti-AI-Slop với Quick Prompts EN/VI, Safe Structured Renderer (zero raw HTML), Citation Chips và Mini Fit Recommendation Card.
+
+---
+
+## 8. v2.1 Storefront Real Photo Gallery, Rich Cart & Admin Media Portal Delta
+
+Chi tiết thiết kế tại [12-real-product-media-and-rich-cart.md](./12-real-product-media-and-rich-cart.md) (triển khai ở Phase 13B):
+- **Zero-Broken-Image Resilience (`ProductThumbnail.jsx`, `BikePhotoGallery.jsx`, `BikeCard.jsx`):**
+  - Mọi thẻ `<img>` thương mại đều có xử lý `onError` hạ cấp tức thì sang 2D Parametric Wireframe SVG (`2D Spec Preview`) cho xe máy hoặc Technical SKU Card cho phụ kiện.
+  - Trên `/` và `/bikes`, `BikeCard` dùng khung `aspect-[16/10]` (`object-cover` cho ảnh thật + micro-badge `2D FIT READY`). Trên `/bikes/[slug]`, `BikePhotoGallery` đặt ở Tier 1 trái (`object-contain`, dải thumbnail + Radix Dialog Lightbox) và giữ nguyên `<RiderFitSimulator id="simulator" />` luôn hiển thị ở Tier 2.
+- **Accessories Photos & `?sku=...` Deep-Link (`/accessories`):**
+  - Mỗi card phụ kiện có khung `aspect-[4/3]` (`object-contain`); `accessories/page.jsx` đọc async `searchParams.sku` để lọc/highlight card khớp (`border-signal`, auto-scroll, nút xóa lọc nhanh).
+- **Rich Cart, Checkout, Account Orders & Chatbot (`MiniFitCard`):**
+  - `/cart` hiển thị thumbnail clickable, tiêu đề là `<Link href={productUrl}>` tới `/bikes/[slug]` hoặc `/accessories?sku=...` kèm link phụ `View bike` / `View item`.
+  - `/checkout` bổ sung danh sách item có thumbnail gọn trong `<aside>` Order Summary (không thêm `<input>` vào form); `/account` (tab Orders), `/admin/orders` drawer và `MiniFitCard` đồng bộ hiển thị thumbnail thật.
+- **Admin Media Portal (`/admin/bikes/[id]` & `/admin/accessories`):**
+  - Tab `Media & Calibration` trên `/admin/bikes/[id]` tách rõ 2 khu vực dọc: **Real Product Photos (Cover & Gallery)** (`BikePhotoManager.jsx`: multi-upload R2, `COVER PHOTO`, `Set as Cover`, `Reorder`, `Delete`) và **2D Side Profile Blueprint & 6-Point UV Calibration** (`BlueprintCalibrationTool.jsx`, khóa riêng `SIDE_PROFILE_BLUEPRINT`).
+  - `/admin/accessories` bổ sung cột ảnh thumbnail và `AccessoryPhotoUploader.jsx` (hỗ trợ upload 2 bước tự động khi Create và Replace/Remove khi Edit).
