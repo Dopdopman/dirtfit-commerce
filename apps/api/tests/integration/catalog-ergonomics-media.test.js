@@ -12,6 +12,10 @@ const VALID_JPEG_BYTES = Buffer.from([
   0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
 ]);
 
+const VALID_WEBP_BYTES = Buffer.from([
+  0x52, 0x49, 0x46, 0x46, 0x0c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
+]);
+
 const SPOOFED_SVG_BYTES = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script></svg>',
   'utf8'
@@ -806,6 +810,353 @@ describe('Phase 4/12 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidatio
     expect(spec.paths['/api/v1/bikes']).toBeTruthy();
     expect(spec.paths['/api/v1/ergonomics/simulate']).toBeTruthy();
     expect(spec.paths['/api/v1/admin/media/presign']).toBeTruthy();
+    expect(spec.paths['/api/v1/admin/bikes/{id}/media/presign']).toBeTruthy();
     expect(spec.paths['/api/v1/admin/bikes/{id}/media/{mediaId}/calibration']).toBeTruthy();
+    expect(spec.paths['/api/v1/admin/accessories/{id}/media/presign']).toBeTruthy();
+  });
+
+  it('manages Bike Real Photo Gallery (presign -> confirm -> set-primary -> reorder -> delete) without touching 2D Blueprint, and serves local media only outside production', async () => {
+    const slug = `v21-gallery-${runId}`;
+    const bikeRes = await request
+      .post('/api/v1/admin/bikes')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        brandId: hondaBrand.id,
+        sku: `V21-GAL-${runId}`,
+        name: `v21 Gallery Bike ${runId}`,
+        slug,
+        modelYear: 2026,
+        category: 'ENDURO',
+        ridingFocus: 'OFF_ROAD',
+        engineCc: 350,
+        priceVnd: 310_000_000,
+        depositAmountVnd: 25_000_000,
+        stockQty: 2,
+        status: 'ACTIVE',
+        geometrySpec: {
+          unladenSeatHeightMm: 950,
+          seatWidthMm: 145,
+          wheelbaseMm: 1480,
+          groundClearanceMm: 340,
+          frontWheelDiameterIn: 21,
+          rearWheelDiameterIn: 18,
+          frontTireOuterRadiusMm: 358,
+          rearTireOuterRadiusMm: 342,
+          frontTravelMm: 300,
+          rearTravelMm: 310,
+          staticSagRearMm: 34,
+          staticSagFrontMm: 26,
+          seatPocketXMm: 560,
+          seatPocketYMm: 950,
+          footpegXMm: 620,
+          footpegYMm: 410,
+          handlebarGripXMm: 950,
+          handlebarGripYMm: 1170,
+          wetWeightKg: 112,
+        },
+      });
+    expect(bikeRes.status).toBe(201);
+    const bike = bikeRes.body.data.bike;
+    createdBikeIds.push(bike.id);
+    createdAuditEntityIds.push(bike.id);
+
+    // 1. Upload primary 2D Blueprint first
+    const bpPresign = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        mediaType: 'SIDE_PROFILE_BLUEPRINT',
+        mimeType: 'image/png',
+        sizeBytes: VALID_PNG_BYTES.length,
+      });
+    expect(bpPresign.status).toBe(201);
+    expect(bpPresign.body.data.storageKey.startsWith(`bikes/${bike.id}/blueprint/`)).toBe(true);
+    await request
+      .put(bpPresign.body.data.uploadPath)
+      .set('content-type', 'image/png')
+      .send(VALID_PNG_BYTES);
+    const bpConfirm = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        storageKey: bpPresign.body.data.storageKey,
+        declaredMimeType: 'image/png',
+        mediaType: 'SIDE_PROFILE_BLUEPRINT',
+        isPrimary: true,
+      });
+    expect(bpConfirm.status).toBe(201);
+    const blueprintMedia = bpConfirm.body.data.media;
+    createdMediaIds.push(blueprintMedia.id);
+
+    // Verify bike with blueprint only uses BLUEPRINT fallback cleanly
+    const bpOnlyDetail = await request.get(`/api/v1/bikes/${slug}`);
+    expect(bpOnlyDetail.status).toBe(200);
+    expect(bpOnlyDetail.body.data.bike.commercialImageKind).toBe('BLUEPRINT');
+    expect(bpOnlyDetail.body.data.bike.blueprintImageUrl).toBe(blueprintMedia.url);
+
+    // 2. Upload 2 Real GALLERY Photos (WebP + PNG)
+    const g1Presign = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        mediaType: 'GALLERY',
+        mimeType: 'image/webp',
+        sizeBytes: VALID_WEBP_BYTES.length,
+      });
+    expect(g1Presign.status).toBe(201);
+    expect(g1Presign.body.data.storageKey.startsWith(`bikes/${bike.id}/photos/`)).toBe(true);
+    await request
+      .put(g1Presign.body.data.uploadPath)
+      .set('content-type', 'image/webp')
+      .send(VALID_WEBP_BYTES);
+    const g1Confirm = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        storageKey: g1Presign.body.data.storageKey,
+        declaredMimeType: 'image/webp',
+        mediaType: 'GALLERY',
+        altText: 'Studio right view',
+      });
+    expect(g1Confirm.status).toBe(201);
+    const photo1 = g1Confirm.body.data.media;
+    createdMediaIds.push(photo1.id);
+    expect(photo1.isPrimary).toBe(true);
+
+    const g2Presign = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        mediaType: 'GALLERY',
+        mimeType: 'image/png',
+        sizeBytes: VALID_PNG_BYTES.length,
+      });
+    await request
+      .put(g2Presign.body.data.uploadPath)
+      .set('content-type', 'image/png')
+      .send(VALID_PNG_BYTES);
+    const g2Confirm = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        storageKey: g2Presign.body.data.storageKey,
+        declaredMimeType: 'image/png',
+        mediaType: 'GALLERY',
+        altText: 'Cockpit closeup',
+      });
+    expect(g2Confirm.status).toBe(201);
+    const photo2 = g2Confirm.body.data.media;
+    createdMediaIds.push(photo2.id);
+    expect(photo2.isPrimary).toBe(false);
+
+    // Local preview route serves genuine image bytes with nosniff
+    const localReadRes = await request.get(`/api/v1/media/local/${g1Presign.body.data.storageKey}`);
+    expect(localReadRes.status).toBe(200);
+    expect(localReadRes.headers['x-content-type-options']).toBe('nosniff');
+    expect(Buffer.from(localReadRes.body).subarray(0, 4).toString('ascii')).toBe('RIFF');
+
+    // Traversal attempts blocked
+    const invalidLocalRes = await request.get('/api/v1/media/local/../../package.json');
+    expect(invalidLocalRes.status).toBe(400);
+
+    // Calibration attempt on GALLERY rejected
+    const badCalib = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}/media/${photo1.id}/calibration`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        version: 1,
+        facing: 'RIGHT',
+        imageWidthPx: 1200,
+        imageHeightPx: 800,
+        anchorsUv: {
+          rearAxle: { u: 0.2, v: 0.7 },
+          frontAxle: { u: 0.78, v: 0.7 },
+          groundLineV: 0.91,
+          seatPocket: { u: 0.43, v: 0.35 },
+          footpeg: { u: 0.45, v: 0.66 },
+          handlebarGrip: { u: 0.64, v: 0.2 },
+        },
+      });
+    expect(badCalib.status).toBe(400);
+
+    // 3. Reorder + Set photo2 as Cover -> Verify blueprint stays intact & primary swaps
+    const reorderRes = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}/media/reorder`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ orderedMediaIds: [photo2.id, photo1.id] });
+    expect(reorderRes.status).toBe(200);
+
+    const setPrimaryRes = await request
+      .patch(`/api/v1/admin/bikes/${bike.id}/media/${photo2.id}/primary`)
+      .set('authorization', `Bearer ${adminToken}`);
+    expect(setPrimaryRes.status).toBe(200);
+    expect(setPrimaryRes.body.data.media.isPrimary).toBe(true);
+
+    const publicDetail = await request.get(`/api/v1/bikes/${slug}`);
+    expect(publicDetail.status).toBe(200);
+    expect(publicDetail.body.data.bike.coverImageUrl).toBe(photo2.url);
+    expect(publicDetail.body.data.bike.coverImageKind).toBe('PHOTO');
+    expect(publicDetail.body.data.bike.galleryImages).toHaveLength(2);
+    expect(publicDetail.body.data.bike.blueprintImageUrl).toBe(blueprintMedia.url);
+
+    // 4. Delete current cover photo2 -> auto-promotes photo1, purges object, keeps blueprint
+    const deleteRes = await request
+      .delete(`/api/v1/admin/bikes/${bike.id}/media/${photo2.id}`)
+      .set('authorization', `Bearer ${adminToken}`);
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body.data.deletedMediaId).toBe(photo2.id);
+    expect(deleteRes.body.data.promotedCoverMediaId).toBe(photo1.id);
+    expect(app.storage.hasObject(photo2.storageKey)).toBe(false);
+
+    const afterDeleteDetail = await request.get(`/api/v1/bikes/${slug}`);
+    expect(afterDeleteDetail.status).toBe(200);
+    expect(afterDeleteDetail.body.data.bike.coverImageUrl).toBe(photo1.url);
+    expect(afterDeleteDetail.body.data.bike.blueprintImageUrl).toBe(blueprintMedia.url);
+
+    // 5. Verify production gating on /api/v1/media/local/* -> 404
+    const prodServer = await startTestServer({
+      envOverrides: {
+        NODE_ENV: 'production',
+        SWAGGER_ENABLED: false,
+        ENABLE_MOCK_OAUTH: 'false',
+        GOOGLE_OAUTH_ENABLED: 'false',
+        ENABLE_MOCK_PAYMENT: false,
+        PAYMENT_DEFAULT_PROVIDER: 'PAYOS',
+        STORAGE_DRIVER: 'r2',
+        R2_ACCOUNT_ID: 'dummy-r2-account',
+        R2_ACCESS_KEY_ID: 'dummy-r2-key',
+        R2_SECRET_ACCESS_KEY: 'dummy-r2-secret',
+        R2_BUCKET_NAME: 'dirtfit-media-prod',
+      },
+      rateLimitNamespace: `df:rl:v21-prod-media:${runId}:`,
+    });
+    try {
+      const prodLocalRead = await prodServer.request.get(
+        `/api/v1/media/local/${g1Presign.body.data.storageKey}`
+      );
+      expect(prodLocalRead.status).toBe(404);
+    } finally {
+      await prodServer.close();
+    }
+  });
+
+  it('manages Accessory R2/local photo upload, Magic Bytes security, RBAC 403, replacement cleanup & delete with AuditLog', async () => {
+    const createAccRes = await request
+      .post('/api/v1/admin/accessories')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        sku: `ACC-MEDIA-${runId}`,
+        name: `Media Test Accessory ${runId}`,
+        slug: `media-test-acc-${runId}`,
+        category: 'LOWERING_LINK',
+        brandName: 'Zeta Racing',
+        priceVnd: 3_100_000,
+        stockQty: 6,
+      });
+    expect(createAccRes.status).toBe(201);
+    const accessory = createAccRes.body.data.accessory;
+    createdAccessoryIds.push(accessory.id);
+    createdAuditEntityIds.push(accessory.id);
+    expect(accessory.imageUrl).toBeNull();
+    expect(accessory.imageKind).toBe('PLACEHOLDER');
+
+    // RBAC: CUSTOMER and SALES_STAFF blocked with 403
+    const custForbidden = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/presign`)
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ mimeType: 'image/png', sizeBytes: VALID_PNG_BYTES.length });
+    expect(custForbidden.status).toBe(403);
+
+    const salesForbidden = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/presign`)
+      .set('authorization', `Bearer ${salesToken}`)
+      .send({ mimeType: 'image/png', sizeBytes: VALID_PNG_BYTES.length });
+    expect(salesForbidden.status).toBe(403);
+
+    // Oversized & spoofed SVG blocked
+    const oversized = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ mimeType: 'image/png', sizeBytes: 6 * 1024 * 1024 });
+    expect(oversized.status).toBe(400);
+
+    const spoofPresign = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ mimeType: 'image/png', sizeBytes: SPOOFED_SVG_BYTES.length });
+    expect(spoofPresign.status).toBe(201);
+    await request
+      .put(spoofPresign.body.data.uploadPath)
+      .set('content-type', 'image/png')
+      .send(SPOOFED_SVG_BYTES);
+    const spoofConfirm = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        storageKey: spoofPresign.body.data.storageKey,
+        declaredMimeType: 'image/png',
+      });
+    expect(spoofConfirm.status).toBe(422);
+    expect(app.storage.hasObject(spoofPresign.body.data.storageKey)).toBe(false);
+
+    // Valid PNG upload -> confirm -> served locally
+    const pngPresign = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ mimeType: 'image/png', sizeBytes: VALID_PNG_BYTES.length });
+    expect(pngPresign.status).toBe(201);
+    const firstKey = pngPresign.body.data.storageKey;
+    expect(firstKey.startsWith(`accessories/${accessory.id}/`)).toBe(true);
+    await request
+      .put(pngPresign.body.data.uploadPath)
+      .set('content-type', 'image/png')
+      .send(VALID_PNG_BYTES);
+    const pngConfirm = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ storageKey: firstKey, declaredMimeType: 'image/png' });
+    expect(pngConfirm.status).toBe(200);
+    expect(pngConfirm.body.data.verifiedMime).toBe('image/png');
+    expect(pngConfirm.body.data.accessory.imageKind).toBe('PHOTO');
+    expect(pngConfirm.body.data.accessory.imageUrl).toContain(`/api/v1/media/local/${firstKey}`);
+
+    const servePng = await request.get(`/api/v1/media/local/${firstKey}`);
+    expect(servePng.status).toBe(200);
+
+    // Replace with WebP -> purges old PNG object cleanly
+    const webpPresign = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ mimeType: 'image/webp', sizeBytes: VALID_WEBP_BYTES.length });
+    const secondKey = webpPresign.body.data.storageKey;
+    await request
+      .put(webpPresign.body.data.uploadPath)
+      .set('content-type', 'image/webp')
+      .send(VALID_WEBP_BYTES);
+    const webpConfirm = await request
+      .post(`/api/v1/admin/accessories/${accessory.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ storageKey: secondKey, declaredMimeType: 'image/webp' });
+    expect(webpConfirm.status).toBe(200);
+    expect(app.storage.hasObject(firstKey)).toBe(false);
+    expect(app.storage.hasObject(secondKey)).toBe(true);
+
+    // Delete accessory photo -> nulls imageUrl & records AuditLog
+    const delRes = await request
+      .delete(`/api/v1/admin/accessories/${accessory.id}/media`)
+      .set('authorization', `Bearer ${adminToken}`);
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.data.accessory.imageUrl).toBeNull();
+    expect(delRes.body.data.accessory.imageKind).toBe('PLACEHOLDER');
+    expect(app.storage.hasObject(secondKey)).toBe(false);
+
+    const accAudit = await app.prisma.auditLog.findFirst({
+      where: {
+        entityType: 'Accessory',
+        entityId: accessory.id,
+        action: 'ACCESSORY_MEDIA_DELETED',
+      },
+    });
+    expect(accAudit).toBeTruthy();
   });
 });

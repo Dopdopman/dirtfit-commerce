@@ -1,4 +1,4 @@
-import { mapMoneyFieldsToNumbers } from '@dirtfit/shared';
+import { mapMoneyFieldsToNumbers, resolveAccessoryMedia } from '@dirtfit/shared';
 
 /**
  * Convert a Prisma Accessory record (and optional compatible bikes) to a JSON-safe DTO.
@@ -7,6 +7,7 @@ import { mapMoneyFieldsToNumbers } from '@dirtfit/shared';
  */
 export function mapAccessoryRecord(accessory) {
   const safe = mapMoneyFieldsToNumbers(accessory, ['priceVnd']);
+  const media = resolveAccessoryMedia(safe);
 
   return {
     id: safe.id,
@@ -20,7 +21,9 @@ export function mapAccessoryRecord(accessory) {
     reservedQty: safe.reservedQty,
     version: safe.version,
     status: safe.status,
-    imageUrl: safe.imageUrl ?? null,
+    imageUrl: media.imageUrl,
+    imageKind: media.imageKind,
+    imageStorageKey: safe.imageStorageKey ?? null,
     descriptionMd: safe.descriptionMd ?? null,
     ergoImpactJson: safe.ergoImpactJson ?? null,
     createdAt: safe.createdAt instanceof Date ? safe.createdAt.toISOString() : safe.createdAt,

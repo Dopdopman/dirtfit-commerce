@@ -230,6 +230,88 @@ describe('Phase 2 Database Constraints, Seed Integrity & Engine Integration', ()
     }
   });
 
+  it('enforces single active primary commercial photo (uq_bike_single_primary_photo) independently of SIDE_PROFILE_BLUEPRINT (23505)', async () => {
+    const brand = await prisma.brand.findFirst();
+    expect(brand).toBeTruthy();
+    const uid = crypto.randomUUID().slice(0, 8);
+    const tempBike = await prisma.bike.create({
+      data: {
+        brandId: brand.id,
+        sku: `MEDIA-IDX-${uid}`,
+        name: `Media Index Constraint Bike ${uid}`,
+        slug: `media-idx-${uid}`,
+        modelYear: 2026,
+        category: 'ENDURO',
+        ridingFocus: 'OFF_ROAD',
+        engineCc: 250,
+        priceVnd: 150_000_000n,
+        depositAmountVnd: 15_000_000n,
+        stockQty: 1,
+        status: 'ACTIVE',
+      },
+    });
+
+    try {
+      // 1 bike can simultaneously have primary HERO/GALLERY AND primary SIDE_PROFILE_BLUEPRINT
+      const primaryPhoto = await prisma.bikeMedia.create({
+        data: {
+          bikeId: tempBike.id,
+          url: `https://pub-test.r2.dev/bikes/${tempBike.id}/photos/hero.webp`,
+          storageKey: `bikes/${tempBike.id}/photos/${crypto.randomUUID()}.webp`,
+          mediaType: 'GALLERY',
+          isPrimary: true,
+        },
+      });
+      const primaryBlueprint = await prisma.bikeMedia.create({
+        data: {
+          bikeId: tempBike.id,
+          url: `https://pub-test.r2.dev/bikes/${tempBike.id}/blueprint/bp.png`,
+          storageKey: `bikes/${tempBike.id}/blueprint/${crypto.randomUUID()}.png`,
+          mediaType: 'SIDE_PROFILE_BLUEPRINT',
+          isPrimary: true,
+        },
+      });
+      expect(primaryPhoto.isPrimary).toBe(true);
+      expect(primaryBlueprint.isPrimary).toBe(true);
+
+      // Duplicate active primary GALLERY/HERO for the same bike fails with SQLSTATE 23505
+      let dupPhotoErr = null;
+      try {
+        await prisma.$executeRaw`
+          INSERT INTO bike_media (id, bike_id, url, storage_key, media_type, is_primary, updated_at)
+          VALUES (
+            gen_random_uuid(),
+            ${tempBike.id}::uuid,
+            'https://pub-test.r2.dev/bikes/dup-cover.webp',
+            'bikes/test/dup-cover.webp',
+            'HERO'::"MediaType",
+            true,
+            NOW()
+          )
+        `;
+      } catch (err) {
+        dupPhotoErr = err;
+      }
+      expect(dupPhotoErr).not.toBeNull();
+      expect(dupPhotoErr.meta?.code).toBe('23505');
+
+      // Soft-deleted primary commercial photo is ignored by partial unique index
+      const softDeletedCover = await prisma.bikeMedia.create({
+        data: {
+          bikeId: tempBike.id,
+          url: 'https://pub-test.r2.dev/bikes/archived-cover.jpg',
+          storageKey: 'bikes/test/archived-cover.jpg',
+          mediaType: 'HERO',
+          isPrimary: true,
+          deletedAt: new Date(),
+        },
+      });
+      expect(softDeletedCover.deletedAt).not.toBeNull();
+    } finally {
+      await prisma.bike.delete({ where: { id: tempBike.id } });
+    }
+  });
+
   it('maps all 8 DB bikes BigInt -> Number safely and evaluates ergonomics-engine without NaN or JSON error', () => {
     const rider = {
       heightCm: 170,

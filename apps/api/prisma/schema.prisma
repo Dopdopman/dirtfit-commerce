@@ -411,6 +411,7 @@ model Accessory {
   version         Int               @default(1)
   status          ProductStatus     @default(ACTIVE)
   imageUrl        String?           @map("image_url") @db.VarChar(512)
+  imageStorageKey String?           @map("image_storage_key") @db.VarChar(255)
   descriptionMd   String?           @map("description_md") @db.Text
   ergoImpactJson  Json?             @map("ergo_impact_json")
   createdAt       DateTime          @default(now()) @map("created_at")

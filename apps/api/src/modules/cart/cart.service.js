@@ -4,6 +4,10 @@ import {
   COD_MAX_AMOUNT_VND,
   ERROR_CODES,
   ORDER_TYPES,
+  buildAccessoryProductUrl,
+  buildBikeProductUrl,
+  resolveAccessoryMedia,
+  resolveBikeMedia,
   toSafeVndNumber,
   validateCodEligibility,
 } from '@dirtfit/shared';
@@ -108,6 +112,10 @@ async function buildHydratedCart(prisma, cart) {
       subtotalBigInt += lineTotalBigInt;
       bikeDepositTotalBigInt += depositBigInt * qtyBigInt;
 
+      const bikeMedia = resolveBikeMedia(item.bike.media);
+      const productUrl = buildBikeProductUrl(item.bike.slug);
+      const brandName = item.bike.brand?.name ?? null;
+
       return {
         id: item.id,
         itemType: 'BIKE',
@@ -121,14 +129,24 @@ async function buildHydratedCart(prisma, cart) {
         lineTotalVnd: toSafeVndNumber(lineTotalBigInt, 'lineTotalVnd'),
         availableQty,
         inStock: availableQty >= item.quantity,
+        slug: item.bike.slug,
+        sku: item.bike.sku,
+        brand: brandName,
+        category: item.bike.category,
+        productUrl,
+        imageUrl: bikeMedia.commercialImageUrl,
+        imageKind: bikeMedia.commercialImageKind,
         product: {
           id: item.bike.id,
           sku: item.bike.sku,
           name: item.bike.name,
           slug: item.bike.slug,
           category: item.bike.category,
-          brandName: item.bike.brand?.name ?? null,
-          imageUrl: item.bike.media?.[0]?.url ?? null,
+          brandName,
+          brand: brandName,
+          productUrl,
+          imageUrl: bikeMedia.commercialImageUrl,
+          imageKind: bikeMedia.commercialImageKind,
           status: item.bike.status,
         },
       };
@@ -157,6 +175,10 @@ async function buildHydratedCart(prisma, cart) {
     installLaborTotalBigInt += installLaborBigInt * qtyBigInt;
     accessoryWithLaborBigInt += lineTotalBigInt;
 
+    const accMedia = resolveAccessoryMedia(acc);
+    const accProductUrl = acc ? buildAccessoryProductUrl(acc.sku) : '/accessories';
+    const accBrand = acc?.brandName ?? null;
+
     return {
       id: item.id,
       itemType: 'ACCESSORY',
@@ -170,6 +192,13 @@ async function buildHydratedCart(prisma, cart) {
       lineTotalVnd: toSafeVndNumber(lineTotalBigInt, 'lineTotalVnd'),
       availableQty,
       inStock: availableQty >= item.quantity,
+      slug: acc?.slug ?? null,
+      sku: acc?.sku ?? null,
+      brand: accBrand,
+      category: acc?.category ?? null,
+      productUrl: accProductUrl,
+      imageUrl: accMedia.imageUrl,
+      imageKind: accMedia.imageKind,
       product: acc
         ? {
             id: acc.id,
@@ -177,8 +206,11 @@ async function buildHydratedCart(prisma, cart) {
             name: acc.name,
             slug: acc.slug,
             category: acc.category,
-            brandName: acc.brandName ?? null,
-            imageUrl: acc.imageUrl ?? null,
+            brandName: accBrand,
+            brand: accBrand,
+            productUrl: accProductUrl,
+            imageUrl: accMedia.imageUrl,
+            imageKind: accMedia.imageKind,
             status: acc.status,
           }
         : null,

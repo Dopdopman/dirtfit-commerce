@@ -10,18 +10,17 @@ export function createLocalMockStorageAdapter(env) {
   const tokens = new Map();
   const objects = new Map();
   const apiBaseUrl = env.API_URL.replace(/\/+$/, '');
-  const publicBaseUrl = env.R2_PUBLIC_BASE_URL.replace(/\/+$/, '');
 
   return {
     driver: 'local',
 
     /**
-     * Build public CDN URL for a verified storage key.
+     * Build local HTTP preview URL for an uploaded object stored in memory.
      * @param {string} storageKey
      * @returns {string}
      */
     getPublicUrl(storageKey) {
-      return `${publicBaseUrl}/${storageKey}`;
+      return `${apiBaseUrl}/api/v1/media/local/${storageKey}`;
     },
 
     /**
@@ -54,8 +53,30 @@ export function createLocalMockStorageAdapter(env) {
         headers: {
           'content-type': mimeType,
         },
-        publicUrl: `${publicBaseUrl}/${storageKey}`,
+        publicUrl: `${apiBaseUrl}/api/v1/media/local/${storageKey}`,
         expiresInSeconds,
+      };
+    },
+
+    /**
+     * Retrieve full object buffer & metadata for non-prod local media preview serving.
+     * @param {string} storageKey
+     * @returns {Promise<{ buffer: Buffer, contentType: string, sizeBytes: number }>}
+     */
+    async getLocalObject(storageKey) {
+      const entry = objects.get(storageKey);
+      if (!entry) {
+        throw new AppError({
+          code: ERROR_CODES.NOT_FOUND,
+          status: 404,
+          title: 'Local media object not found',
+          detail: `No local object exists at storage key ${storageKey}.`,
+        });
+      }
+      return {
+        buffer: entry.buffer,
+        contentType: entry.contentType || 'application/octet-stream',
+        sizeBytes: entry.sizeBytes,
       };
     },
 

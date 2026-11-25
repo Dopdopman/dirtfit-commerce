@@ -147,17 +147,24 @@ export function createR2StorageAdapter(env) {
     },
 
     /**
-     * Delete an object from R2 (used to purge rejected/spoofed uploads).
+     * Delete an object from R2 (best-effort; ignores 404/NoSuchKey).
      * @param {string} storageKey
      * @returns {Promise<void>}
      */
     async deleteObject(storageKey) {
-      await client.send(
-        new DeleteObjectCommand({
-          Bucket: bucket,
-          Key: storageKey,
-        })
-      );
+      try {
+        await client.send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: storageKey,
+          })
+        );
+      } catch (err) {
+        if (err?.$metadata?.httpStatusCode === 404 || err?.name === 'NoSuchKey') {
+          return;
+        }
+        throw err;
+      }
     },
 
     async close() {

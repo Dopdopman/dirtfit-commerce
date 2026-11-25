@@ -1,4 +1,11 @@
-import { mapMoneyFieldsToNumbers } from '@dirtfit/shared';
+import {
+  IMAGE_KINDS,
+  buildAccessoryProductUrl,
+  buildBikeProductUrl,
+  mapMoneyFieldsToNumbers,
+  resolveAccessoryMedia,
+  resolveBikeMedia,
+} from '@dirtfit/shared';
 
 const ORDER_MONEY_FIELDS = [
   'subtotalVnd',
@@ -14,12 +21,42 @@ const ORDER_MONEY_FIELDS = [
 const ORDER_ITEM_MONEY_FIELDS = ['unitPriceVnd', 'installLaborVnd', 'lineTotalVnd'];
 
 /**
- * Convert Prisma OrderItem records into JSON-safe DTOs.
+ * Convert Prisma OrderItem records into JSON-safe DTOs with live productUrl & imageUrl fallback.
  * @param {object} item
  * @returns {object}
  */
 export function mapOrderItem(item) {
   const safe = mapMoneyFieldsToNumbers(item, ORDER_ITEM_MONEY_FIELDS);
+  const meta =
+    safe.metadataJson && typeof safe.metadataJson === 'object' ? safe.metadataJson : null;
+
+  let slug = meta?.slug ?? null;
+  let productUrl = meta?.productUrl ?? null;
+  let imageUrl = meta?.imageUrl ?? null;
+  let imageKind = meta?.imageKind ?? IMAGE_KINDS.PLACEHOLDER;
+
+  if (safe.itemType === 'BIKE') {
+    const liveSlug = safe.bike?.slug ?? slug;
+    slug = liveSlug;
+    if (liveSlug) {
+      productUrl = buildBikeProductUrl(liveSlug);
+    }
+    if (safe.bike?.media) {
+      const resolved = resolveBikeMedia(safe.bike.media);
+      imageUrl = resolved.commercialImageUrl ?? imageUrl;
+      imageKind = resolved.commercialImageUrl ? resolved.commercialImageKind : imageKind;
+    }
+  } else if (safe.itemType === 'ACCESSORY') {
+    const liveSku = safe.accessory?.sku ?? safe.skuSnapshot;
+    slug = safe.accessory?.slug ?? slug;
+    productUrl = liveSku ? buildAccessoryProductUrl(liveSku) : (productUrl ?? '/accessories');
+    if (safe.accessory) {
+      const resolved = resolveAccessoryMedia(safe.accessory);
+      imageUrl = resolved.imageUrl ?? imageUrl;
+      imageKind = resolved.imageUrl ? resolved.imageKind : imageKind;
+    }
+  }
+
   return {
     id: safe.id,
     orderId: safe.orderId,
@@ -28,11 +65,15 @@ export function mapOrderItem(item) {
     accessoryId: safe.accessoryId ?? null,
     productNameSnapshot: safe.productNameSnapshot,
     skuSnapshot: safe.skuSnapshot,
+    slug,
+    productUrl,
+    imageUrl,
+    imageKind,
     unitPriceVnd: safe.unitPriceVnd,
     installLaborVnd: safe.installLaborVnd,
     quantity: safe.quantity,
     lineTotalVnd: safe.lineTotalVnd,
-    metadataJson: safe.metadataJson ?? null,
+    metadataJson: meta,
   };
 }
 

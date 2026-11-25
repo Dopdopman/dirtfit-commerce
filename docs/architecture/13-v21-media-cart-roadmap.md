@@ -62,10 +62,10 @@ flowchart TD
      - Mở rộng `catalog-ergonomics-media.test.js` (full bike gallery lifecycle, full accessory R2/local upload + magic bytes reject + RBAC `403` + delete, non-prod local media serve vs prod `404`).
      - Mở rộng `commerce-checkout-payments.test.js` (kiểm chứng enriched cart & order `imageUrl`, `imageKind`, `productUrl`).
 - **Definition of Done (DoD) — Phase 13A:**
-  - [ ] `pnpm --filter @dirtfit/api run db:validate && pnpm --filter @dirtfit/api run db:migrate:deploy && pnpm --filter @dirtfit/api run db:generate` thoát mã `0`.
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
-  - [ ] `pnpm test:unit` pass 100% (bao gồm `packages/shared/tests/media.test.js` và `apps/api/tests/unit/media-storage-keys.test.js`).
-  - [ ] `pnpm test:integration` (Supertest, chạy 2 lần liên tiếp không flaky, kể cả với `ENABLE_MOCK_OAUTH=true` & `GOOGLE_OAUTH_ENABLED=true`) pass 100%.
+  - [x] `pnpm --filter @dirtfit/api run db:validate && pnpm --filter @dirtfit/api run db:migrate:deploy && pnpm --filter @dirtfit/api run db:generate` thoát mã `0`.
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
+  - [x] `pnpm test:unit` pass 100% (bao gồm `packages/shared/tests/media.test.js` và `apps/api/tests/unit/media-storage-keys.test.js`).
+  - [x] `pnpm test:integration` (Supertest, chạy 2 lần liên tiếp không flaky, kể cả với `ENABLE_MOCK_OAUTH=true` & `GOOGLE_OAUTH_ENABLED=true`) pass 100%.
 
 ---
 

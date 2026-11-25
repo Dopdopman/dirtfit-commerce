@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { MEDIA_TYPES } from '@dirtfit/shared';
 
 const MIME_TO_EXTENSION = Object.freeze({
   'image/jpeg': 'jpg',
@@ -6,35 +7,129 @@ const MIME_TO_EXTENSION = Object.freeze({
   'image/webp': 'webp',
 });
 
-const SAFE_STORAGE_KEY_REGEX =
+const CATEGORIZED_BIKE_STORAGE_KEY_REGEX =
+  /^bikes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(photos|blueprint|specs)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
+
+const LEGACY_BIKE_STORAGE_KEY_REGEX =
   /^bikes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
 
+const ACCESSORY_STORAGE_KEY_REGEX =
+  /^accessories\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
+
 /**
- * Generate a collision-free, path-traversal-proof object storage key for a bike media upload.
+ * Resolve storage subfolder name based on BikeMedia type.
+ * @param {string} [mediaType]
+ * @returns {'photos'|'blueprint'|'specs'}
+ */
+function resolveBikeFolder(mediaType) {
+  if (mediaType === MEDIA_TYPES.SIDE_PROFILE_BLUEPRINT) {
+    return 'blueprint';
+  }
+  if (mediaType === MEDIA_TYPES.SPEC_SHEET) {
+    return 'specs';
+  }
+  return 'photos';
+}
+
+/**
+ * Generate a categorized, path-traversal-proof object storage key for a bike media upload.
  * Client-supplied filenames are intentionally discarded.
  * @param {string} bikeId
+ * @param {string} mediaType
  * @param {string} mimeType
  * @returns {string}
  */
-export function buildSafeStorageKey(bikeId, mimeType) {
+export function buildSafeBikeStorageKey(bikeId, mediaType, mimeType) {
   const ext = MIME_TO_EXTENSION[mimeType];
   if (!ext) {
     throw new Error(`Unsupported media MIME type: ${mimeType}`);
   }
-  return `bikes/${bikeId}/${crypto.randomUUID()}.${ext}`;
+  const folder = resolveBikeFolder(mediaType);
+  return `bikes/${bikeId}/${folder}/${crypto.randomUUID()}.${ext}`;
 }
 
 /**
- * Validate that a storageKey matches the canonical UUID key structure for the target bike.
+ * Backward-compatible alias for buildSafeBikeStorageKey.
+ * @param {string} bikeId
+ * @param {string} mimeType
+ * @param {string} [mediaType]
+ * @returns {string}
+ */
+export function buildSafeStorageKey(bikeId, mimeType, mediaType = MEDIA_TYPES.GALLERY) {
+  return buildSafeBikeStorageKey(bikeId, mediaType, mimeType);
+}
+
+/**
+ * Generate a path-traversal-proof object storage key for an accessory product photo.
+ * @param {string} accessoryId
+ * @param {string} mimeType
+ * @returns {string}
+ */
+export function buildSafeAccessoryStorageKey(accessoryId, mimeType) {
+  const ext = MIME_TO_EXTENSION[mimeType];
+  if (!ext) {
+    throw new Error(`Unsupported media MIME type: ${mimeType}`);
+  }
+  return `accessories/${accessoryId}/${crypto.randomUUID()}.${ext}`;
+}
+
+/**
+ * Validate that a storageKey matches the canonical UUID key structure for the target bike
+ * (supports both v2.1 categorized keys and legacy v1.0/v2.0 flat keys).
+ * @param {string} storageKey
+ * @param {string} expectedBikeId
+ * @returns {boolean}
+ */
+export function validateSafeBikeStorageKey(storageKey, expectedBikeId) {
+  if (typeof storageKey !== 'string') {
+    return false;
+  }
+  const isValidShape =
+    CATEGORIZED_BIKE_STORAGE_KEY_REGEX.test(storageKey) ||
+    LEGACY_BIKE_STORAGE_KEY_REGEX.test(storageKey);
+  if (!isValidShape) {
+    return false;
+  }
+  return storageKey.startsWith(`bikes/${expectedBikeId}/`);
+}
+
+/**
+ * Backward-compatible alias for validateSafeBikeStorageKey.
  * @param {string} storageKey
  * @param {string} expectedBikeId
  * @returns {boolean}
  */
 export function validateSafeStorageKey(storageKey, expectedBikeId) {
-  if (typeof storageKey !== 'string' || !SAFE_STORAGE_KEY_REGEX.test(storageKey)) {
+  return validateSafeBikeStorageKey(storageKey, expectedBikeId);
+}
+
+/**
+ * Validate that a storageKey matches the canonical UUID key structure for the target accessory.
+ * @param {string} storageKey
+ * @param {string} expectedAccessoryId
+ * @returns {boolean}
+ */
+export function validateSafeAccessoryStorageKey(storageKey, expectedAccessoryId) {
+  if (typeof storageKey !== 'string' || !ACCESSORY_STORAGE_KEY_REGEX.test(storageKey)) {
     return false;
   }
-  return storageKey.startsWith(`bikes/${expectedBikeId}/`);
+  return storageKey.startsWith(`accessories/${expectedAccessoryId}/`);
+}
+
+/**
+ * Validate any non-prod local media read storageKey (prevents path traversal and arbitrary paths).
+ * @param {string} storageKey
+ * @returns {boolean}
+ */
+export function validateAnySafeStorageKey(storageKey) {
+  if (typeof storageKey !== 'string' || storageKey.includes('..')) {
+    return false;
+  }
+  return (
+    CATEGORIZED_BIKE_STORAGE_KEY_REGEX.test(storageKey) ||
+    LEGACY_BIKE_STORAGE_KEY_REGEX.test(storageKey) ||
+    ACCESSORY_STORAGE_KEY_REGEX.test(storageKey)
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 import { evaluateBikeFit } from '@dirtfit/ergonomics-engine';
 import { getPolicyDocument, searchKnowledge } from '@dirtfit/knowledge';
 import { POLICY_DOC_SLUGS } from '@dirtfit/knowledge/constants';
-import { CHAT_INTENTS, SHOWROOMS, toSafeVndNumber } from '@dirtfit/shared';
+import { CHAT_INTENTS, SHOWROOMS, resolveBikeMedia, toSafeVndNumber } from '@dirtfit/shared';
 import { CATALOG_KEYS, getOrSetCatalogCache } from '../../common/cache/catalog-cache.js';
 import {
   computeAvailableQty,
@@ -118,6 +118,7 @@ export function evaluateCatalogForRider({
     const recommendedLoweringMm = bestUpsell
       ? Math.max(0, Math.round(bestUpsell.beforeSeatHeightMm - bestUpsell.afterSeatHeightMm))
       : 0;
+    const resolvedMedia = resolveBikeMedia(bike.media);
 
     return {
       _mentionBoost: mentionedSet.has(bike.slug) ? 1 : 0,
@@ -126,6 +127,9 @@ export function evaluateCatalogForRider({
       name: bike.name,
       brandName: bike.brand?.name ?? null,
       category: bike.category,
+      coverImageUrl: bike.coverImageUrl ?? resolvedMedia.coverImageUrl,
+      commercialImageUrl: bike.commercialImageUrl ?? resolvedMedia.commercialImageUrl,
+      coverImageKind: bike.coverImageKind ?? resolvedMedia.commercialImageKind,
       unladenSeatHeightMm: bike.geometrySpec.unladenSeatHeightMm,
       effectiveSeatHeightMm: evalResult.sag.effectiveSeatHeightMm,
       riderSagMm: evalResult.sag.totalRearSagMm,

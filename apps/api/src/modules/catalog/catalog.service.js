@@ -647,6 +647,14 @@ export async function adminCalibrateBikeMedia(app, bikeId, mediaId, calibrationD
       detail: `Media ${mediaId} does not belong to motorcycle ${bikeId}.`,
     });
   }
+  if (existingMedia.mediaType !== 'SIDE_PROFILE_BLUEPRINT') {
+    throw new AppError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      status: 400,
+      title: 'Invalid media type for calibration',
+      detail: 'UV calibration can only be saved on SIDE_PROFILE_BLUEPRINT media assets.',
+    });
+  }
 
   const metrics = computeCalibrationMetrics(calibrationData, bike.geometrySpec);
   if (

@@ -7,8 +7,7 @@ const CART_ITEMS_INCLUDE = {
           brand: true,
           media: {
             where: { deletedAt: null },
-            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
-            take: 2,
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
           },
         },
       },

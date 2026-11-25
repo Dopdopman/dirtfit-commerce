@@ -1,4 +1,9 @@
-import { mapMoneyFieldsToNumbers, toSafeVndNumber } from '@dirtfit/shared';
+import {
+  mapMoneyFieldsToNumbers,
+  resolveAccessoryMedia,
+  resolveBikeMedia,
+  toSafeVndNumber,
+} from '@dirtfit/shared';
 
 /**
  * Map a Prisma Brand record into a JSON-safe DTO.
@@ -111,7 +116,8 @@ export function mapCompatibilityItem(comp) {
           stockQty: mappedAcc.stockQty,
           reservedQty: mappedAcc.reservedQty,
           status: mappedAcc.status,
-          imageUrl: mappedAcc.imageUrl ?? null,
+          imageUrl: resolveAccessoryMedia(mappedAcc).imageUrl,
+          imageKind: resolveAccessoryMedia(mappedAcc).imageKind,
           ergoImpactJson: mappedAcc.ergoImpactJson ?? null,
         }
       : null,
@@ -125,6 +131,8 @@ export function mapCompatibilityItem(comp) {
  */
 export function mapBikeRecord(bike) {
   const safeBike = mapMoneyFieldsToNumbers(bike, ['priceVnd', 'depositAmountVnd']);
+  const mappedMedia = Array.isArray(safeBike.media) ? safeBike.media.map(mapBikeMedia) : [];
+  const resolvedMedia = resolveBikeMedia(mappedMedia);
 
   return {
     id: safeBike.id,
@@ -155,7 +163,15 @@ export function mapBikeRecord(bike) {
         : (safeBike.deletedAt ?? null),
     brand: safeBike.brand ? mapBrand(safeBike.brand) : null,
     geometrySpec: safeBike.geometrySpec ? mapGeometrySpec(safeBike.geometrySpec) : null,
-    media: Array.isArray(safeBike.media) ? safeBike.media.map(mapBikeMedia) : [],
+    coverImageUrl: resolvedMedia.coverImageUrl,
+    coverImageKind: resolvedMedia.coverImageKind,
+    commercialImageUrl: resolvedMedia.commercialImageUrl,
+    commercialImageKind: resolvedMedia.commercialImageKind,
+    blueprintImageUrl: resolvedMedia.blueprintImageUrl,
+    primaryPhoto: resolvedMedia.primaryPhoto,
+    galleryImages: resolvedMedia.galleryImages,
+    primaryBlueprint: resolvedMedia.primaryBlueprint,
+    media: mappedMedia,
     compatibilities: Array.isArray(safeBike.compatibilities)
       ? safeBike.compatibilities.map(mapCompatibilityItem)
       : [],

@@ -846,4 +846,119 @@ describe('Phase 5/12 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, 
     expect(ownerCompleteRes.status).toBe(200);
     expect(ownerCompleteRes.body.data.order.status).toBe('DEPOSIT_PAID');
   });
+
+  it('enriches Cart (GET/POST) and Orders (GET /orders & /orders/:id) with imageUrl, imageKind, and deep-link productUrl', async () => {
+    const validPng = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00,
+    ]);
+
+    const buyer = await registerCustomer('richcart');
+    const bike = await createTestBike({ suffix: 'richcart', stockQty: 2, priceVnd: 195_000_000 });
+    const acc = await createTestAccessory({
+      suffix: 'richcart',
+      stockQty: 5,
+      priceVnd: 3_500_000,
+    });
+
+    // Upload real PNG photo to Bike
+    const bikePresign = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ mediaType: 'GALLERY', mimeType: 'image/png', sizeBytes: validPng.length });
+    expect(bikePresign.status).toBe(201);
+    await request
+      .put(bikePresign.body.data.uploadPath)
+      .set('content-type', 'image/png')
+      .send(validPng);
+    const bikeConfirm = await request
+      .post(`/api/v1/admin/bikes/${bike.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        storageKey: bikePresign.body.data.storageKey,
+        declaredMimeType: 'image/png',
+        mediaType: 'GALLERY',
+        isPrimary: true,
+      });
+    expect(bikeConfirm.status).toBe(201);
+
+    // Upload real PNG photo to Accessory
+    const accPresign = await request
+      .post(`/api/v1/admin/accessories/${acc.id}/media/presign`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ mimeType: 'image/png', sizeBytes: validPng.length });
+    expect(accPresign.status).toBe(201);
+    await request
+      .put(accPresign.body.data.uploadPath)
+      .set('content-type', 'image/png')
+      .send(validPng);
+    const accConfirm = await request
+      .post(`/api/v1/admin/accessories/${acc.id}/media/confirm`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        storageKey: accPresign.body.data.storageKey,
+        declaredMimeType: 'image/png',
+      });
+    expect(accConfirm.status).toBe(200);
+
+    // Add both to buyer cart
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${buyer.token}`)
+      .send({ itemType: 'BIKE', bikeId: bike.id, quantity: 1 });
+    await request
+      .post('/api/v1/cart/items')
+      .set('authorization', `Bearer ${buyer.token}`)
+      .send({ itemType: 'ACCESSORY', accessoryId: acc.id, quantity: 1 });
+
+    const cartRes = await request.get('/api/v1/cart').set('authorization', `Bearer ${buyer.token}`);
+    expect(cartRes.status).toBe(200);
+    const cartItems = cartRes.body.data.cart.items;
+    expect(cartItems).toHaveLength(2);
+
+    const bikeCartItem = cartItems.find((i) => i.itemType === 'BIKE');
+    const accCartItem = cartItems.find((i) => i.itemType === 'ACCESSORY');
+
+    expect(bikeCartItem.productUrl).toBe(`/bikes/${bike.slug}`);
+    expect(bikeCartItem.imageKind).toBe('PHOTO');
+    expect(bikeCartItem.imageUrl).toContain('/api/v1/media/local/');
+    expect(bikeCartItem.product.productUrl).toBe(`/bikes/${bike.slug}`);
+    expect(bikeCartItem.product.imageUrl).toBe(bikeCartItem.imageUrl);
+    expect(bikeCartItem.product.brand).toBe('Honda');
+
+    expect(accCartItem.productUrl).toBe(`/accessories?sku=${encodeURIComponent(acc.sku)}`);
+    expect(accCartItem.imageKind).toBe('PHOTO');
+    expect(accCartItem.imageUrl).toContain('/api/v1/media/local/');
+    expect(accCartItem.product.productUrl).toBe(accCartItem.productUrl);
+
+    // Checkout and verify enriched Order & Orders list
+    const checkoutRes = await request
+      .post('/api/v1/orders/checkout')
+      .set('authorization', `Bearer ${buyer.token}`)
+      .set('idempotency-key', `richcart-checkout-${runId}`)
+      .send({
+        orderType: 'BIKE_DEPOSIT',
+        paymentMethod: 'MOCK',
+        shippingAddress: SHIPPING_ADDRESS,
+      });
+    expect(checkoutRes.status).toBe(201);
+    const placedOrder = checkoutRes.body.data.order;
+    createdOrderIds.push(placedOrder.id);
+
+    const ordersListRes = await request
+      .get('/api/v1/orders')
+      .set('authorization', `Bearer ${buyer.token}`);
+    expect(ordersListRes.status).toBe(200);
+    const fetchedOrder = ordersListRes.body.data.find((o) => o.id === placedOrder.id);
+    expect(fetchedOrder).toBeTruthy();
+
+    const ordBikeItem = fetchedOrder.items.find((i) => i.itemType === 'BIKE');
+    const ordAccItem = fetchedOrder.items.find((i) => i.itemType === 'ACCESSORY');
+    expect(ordBikeItem.productUrl).toBe(`/bikes/${bike.slug}`);
+    expect(ordBikeItem.imageKind).toBe('PHOTO');
+    expect(ordBikeItem.imageUrl).toBe(bikeCartItem.imageUrl);
+    expect(ordAccItem.productUrl).toBe(`/accessories?sku=${encodeURIComponent(acc.sku)}`);
+    expect(ordAccItem.imageKind).toBe('PHOTO');
+    expect(ordAccItem.imageUrl).toBe(accCartItem.imageUrl);
+  });
 });

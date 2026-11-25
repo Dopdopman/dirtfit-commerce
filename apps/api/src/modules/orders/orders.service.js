@@ -8,6 +8,10 @@ import {
   ORDER_TYPES,
   PAYMENT_METHODS,
   USER_ROLES,
+  buildAccessoryProductUrl,
+  buildBikeProductUrl,
+  resolveAccessoryMedia,
+  resolveBikeMedia,
   toSafeVndNumber,
 } from '@dirtfit/shared';
 import { invalidateCatalogCache } from '../../common/cache/catalog-cache.js';
@@ -382,7 +386,7 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
         const lockedBikes =
           sortedBikeIds.length > 0
             ? await tx.$queryRaw`
-                SELECT id, sku, name, price_vnd, deposit_amount_vnd, stock_qty, reserved_qty, status, deleted_at
+                SELECT id, sku, slug, name, price_vnd, deposit_amount_vnd, stock_qty, reserved_qty, status, deleted_at
                 FROM bikes
                 WHERE id IN (${Prisma.join(sortedBikeIds.map((id) => Prisma.sql`${id}::uuid`))})
                 ORDER BY id ASC
@@ -393,7 +397,7 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
         const lockedAccessories =
           sortedAccIds.length > 0
             ? await tx.$queryRaw`
-                SELECT id, sku, name, price_vnd, stock_qty, reserved_qty, status, deleted_at
+                SELECT id, sku, slug, image_url, name, price_vnd, stock_qty, reserved_qty, status, deleted_at
                 FROM accessories
                 WHERE id IN (${Prisma.join(sortedAccIds.map((id) => Prisma.sql`${id}::uuid`))})
                 ORDER BY id ASC
@@ -516,17 +520,43 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
           }
         }
 
-        // Authoritative compatibility labor lookup
-        const compatRows =
+        // Authoritative compatibility labor & bike media snapshot lookup
+        const [compatRows, bikeMediaRows] = await Promise.all([
           sortedBikeIds.length > 0 && sortedAccIds.length > 0
-            ? await tx.bikeAccessoryCompatibility.findMany({
+            ? tx.bikeAccessoryCompatibility.findMany({
                 where: {
                   bikeId: { in: sortedBikeIds },
                   accessoryId: { in: sortedAccIds },
                 },
                 select: { bikeId: true, accessoryId: true, installLaborVnd: true },
               })
-            : [];
+            : Promise.resolve([]),
+          sortedBikeIds.length > 0
+            ? tx.bikeMedia.findMany({
+                where: {
+                  bikeId: { in: sortedBikeIds },
+                  deletedAt: null,
+                },
+                orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+                select: {
+                  id: true,
+                  bikeId: true,
+                  url: true,
+                  mediaType: true,
+                  isPrimary: true,
+                  sortOrder: true,
+                  createdAt: true,
+                },
+              })
+            : Promise.resolve([]),
+        ]);
+
+        const bikeMediaByBikeId = new Map();
+        for (const row of bikeMediaRows) {
+          const list = bikeMediaByBikeId.get(row.bikeId) ?? [];
+          list.push(row);
+          bikeMediaByBikeId.set(row.bikeId, list);
+        }
 
         let subtotalBigInt = 0n;
         let installLaborTotalBigInt = 0n;
@@ -541,6 +571,7 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
             const unitPriceBigInt = BigInt(bike.price_vnd);
             const depositBigInt = BigInt(bike.deposit_amount_vnd);
             const lineTotalBigInt = unitPriceBigInt * qtyBigInt;
+            const resolvedBikeMedia = resolveBikeMedia(bikeMediaByBikeId.get(bike.id) ?? []);
 
             subtotalBigInt += lineTotalBigInt;
             bikeDepositTotalBigInt += depositBigInt * qtyBigInt;
@@ -555,7 +586,13 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
               installLaborVnd: 0n,
               quantity: item.quantity,
               lineTotalVnd: lineTotalBigInt,
-              metadataJson: item.bundleGroupId ? { bundleGroupId: item.bundleGroupId } : undefined,
+              metadataJson: {
+                ...(item.bundleGroupId ? { bundleGroupId: item.bundleGroupId } : {}),
+                slug: bike.slug,
+                productUrl: buildBikeProductUrl(bike.slug),
+                imageUrl: resolvedBikeMedia.commercialImageUrl,
+                imageKind: resolvedBikeMedia.commercialImageKind,
+              },
             });
           } else if (item.itemType === 'ACCESSORY' && item.accessoryId) {
             const acc = accMap.get(item.accessoryId);
@@ -571,6 +608,7 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
             }
             const unitPriceBigInt = BigInt(acc.price_vnd);
             const lineTotalBigInt = (unitPriceBigInt + laborBigInt) * qtyBigInt;
+            const resolvedAccMedia = resolveAccessoryMedia({ imageUrl: acc.image_url });
 
             subtotalBigInt += unitPriceBigInt * qtyBigInt;
             installLaborTotalBigInt += laborBigInt * qtyBigInt;
@@ -586,7 +624,13 @@ export async function checkoutFromCart(app, userId, idempotencyKey, payload, aud
               installLaborVnd: laborBigInt,
               quantity: item.quantity,
               lineTotalVnd: lineTotalBigInt,
-              metadataJson: item.bundleGroupId ? { bundleGroupId: item.bundleGroupId } : undefined,
+              metadataJson: {
+                ...(item.bundleGroupId ? { bundleGroupId: item.bundleGroupId } : {}),
+                slug: acc.slug,
+                productUrl: buildAccessoryProductUrl(acc.sku),
+                imageUrl: resolvedAccMedia.imageUrl,
+                imageKind: resolvedAccMedia.imageKind,
+              },
             });
           }
         }

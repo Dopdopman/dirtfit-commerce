@@ -1,7 +1,35 @@
 import { mapOrderRecord } from './orders.mapper.js';
 
 export const ORDER_FULL_INCLUDE = {
-  items: { orderBy: { id: 'asc' } },
+  items: {
+    orderBy: { id: 'asc' },
+    include: {
+      bike: {
+        select: {
+          slug: true,
+          media: {
+            where: { deletedAt: null },
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+            select: {
+              id: true,
+              url: true,
+              mediaType: true,
+              isPrimary: true,
+              sortOrder: true,
+              createdAt: true,
+            },
+          },
+        },
+      },
+      accessory: {
+        select: {
+          sku: true,
+          slug: true,
+          imageUrl: true,
+        },
+      },
+    },
+  },
   reservations: { orderBy: { createdAt: 'asc' } },
   transactions: { orderBy: { createdAt: 'desc' } },
   user: { select: { id: true, email: true, fullName: true, phone: true } },
