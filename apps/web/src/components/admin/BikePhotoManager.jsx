@@ -195,7 +195,7 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
       await apiRequest(`/api/v1/admin/bikes/${bike.id}/media/reorder`, {
         method: 'PATCH',
         body: {
-          mediaIds: reordered.map((item) => item.id),
+          orderedMediaIds: reordered.map((item) => item.id),
         },
       });
       setStatusMessage(t('media.reorderedToast'));

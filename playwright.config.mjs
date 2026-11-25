@@ -39,6 +39,7 @@ export default defineConfig({
         SWAGGER_ENABLED: 'true',
         PAYMENT_DEFAULT_PROVIDER: 'MOCK',
         ENABLE_MOCK_PAYMENT: 'true',
+        STORAGE_DRIVER: 'local',
         GOOGLE_OAUTH_ENABLED: 'true',
         ENABLE_MOCK_OAUTH: 'true',
         GOOGLE_CALLBACK_URL: `${API_URL}/api/v1/auth/google/callback`,

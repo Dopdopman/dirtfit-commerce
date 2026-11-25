@@ -30,25 +30,31 @@ This guide walks through provisioning **100% free infrastructure** across **Neon
 2. Copy the `rediss://default:<password>@<host>:6379` URI as `REDIS_URL`.
 3. Note: DirtFit does **not** run BullMQ workers against Upstash; stock reclamation uses inline **Lazy Expiration** plus the 15-minute GitHub Actions cron (`sweeper-cron.yml`).
 
-### Step 2.3: Cloudflare R2 Object Storage (Free Tier)
+### Step 2.3: Cloudflare R2 Object Storage (Free Tier) & `v2.1` Product Media
 1. Create a bucket named `dirtfit-media`.
-2. Attach a custom domain (e.g., `cdn.dirtfit.vn`) or enable the R2 public dev URL -> use as `R2_PUBLIC_BASE_URL` and `NEXT_PUBLIC_CDN_URL`.
-3. Configure **Bucket CORS Policy** so browser uploads (`PUT`) from your frontend origin succeed:
+2. Attach a custom domain (e.g., `cdn.dirtfit.vn`) or enable the R2 public dev URL (`https://pub-<id>.r2.dev`) -> configure identical origin on Render (`R2_PUBLIC_BASE_URL`) and Vercel (`NEXT_PUBLIC_CDN_URL`).
+3. Configure **Bucket CORS Policy** so direct browser uploads (`PUT`) and CDN image loads (`GET`/`HEAD`) from your production Vercel domain (and optional preview origins) succeed cleanly:
    ```json
    [
      {
        "AllowedOrigins": ["https://dirtfit.vn", "https://www.dirtfit.vn"],
        "AllowedMethods": ["GET", "PUT", "HEAD"],
        "AllowedHeaders": ["Content-Type"],
+       "ExposeHeaders": ["ETag"],
        "MaxAgeSeconds": 3600
      }
    ]
    ```
+   > **Note:** `apps/api/src/common/storage/r2.adapter.js` intentionally signs **only** the `Content-Type` header on presigned `PutObjectCommand` URLs so it matches `AllowedHeaders: ["Content-Type"]` cleanly without triggering preflight rejections.
 4. Create an **Object Read & Write** API Token scoped strictly to `dirtfit-media` and save:
    - `R2_ACCOUNT_ID`
    - `R2_ACCESS_KEY_ID`
    - `R2_SECRET_ACCESS_KEY`
    - `R2_BUCKET_NAME=dirtfit-media`
+5. **Post-Deploy `v2.1` Real Media Verification & Day-0 Upload Workflow:**
+   - **Verify production routes:** Confirm `GET /api/v1/bikes` returns `coverImageUrl` / `galleryImages` / `blueprintImageUrl` and `GET /api/v1/media/local/bikes/probe/sample.png` returns **`404`** (local mock media routes are strictly unmounted when `NODE_ENV=production` & `STORAGE_DRIVER=r2`).
+   - **Upload Real Motorcycle Photos (`/admin/bikes/[id]`):** Open Tab `3. Media & Blueprint Calibration` -> use **Card 1 (`Commercial Product Photos`)** to upload JPEG/PNG/WebP photos (`<= 5MB`, verified via 4KB Magic Bytes). The first real photo automatically becomes `COVER PHOTO`; Card 2 (`SIDE_PROFILE_BLUEPRINT`) and 6-anchor 2D UV calibration remain completely separate and intact.
+   - **Upload Accessory Studio Photos (`/admin/accessories`):** Edit any accessory (or create a new SKU) and upload a studio photo via the built-in 3-step R2 uploader; Storefront `/accessories`, `/accessories?sku=...`, `/cart`, `/checkout`, and `/account` immediately reflect the live CDN photo.
 
 ### Step 2.4: Payment & Email Providers (Free / Sandbox)
 - **PayOS:** Register merchant channel, set webhook URL to `https://api.dirtfit.vn/api/v1/payments/webhooks/payos`, and copy `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`.

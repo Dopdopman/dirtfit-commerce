@@ -83,6 +83,20 @@ async function main() {
     typeof firstBike.priceVnd === 'number' && Number.isFinite(firstBike.priceVnd),
     `Expected numeric priceVnd, got ${typeof firstBike.priceVnd}`
   );
+  assert(
+    'coverImageUrl' in firstBike &&
+      (firstBike.coverImageUrl === null || typeof firstBike.coverImageUrl === 'string'),
+    'Expected v2.1 coverImageUrl field on /api/v1/bikes items'
+  );
+  assert(
+    Array.isArray(firstBike.galleryImages),
+    'Expected v2.1 galleryImages array on /api/v1/bikes items'
+  );
+  assert(
+    'blueprintImageUrl' in firstBike &&
+      (firstBike.blueprintImageUrl === null || typeof firstBike.blueprintImageUrl === 'string'),
+    'Expected v2.1 blueprintImageUrl field on /api/v1/bikes items'
+  );
 
   // 3. Live Chatbot Grounded API & OAuth providers endpoint
   const [providersRes, chatRes] = await Promise.all([
@@ -127,9 +141,9 @@ async function main() {
     }).catch(() => {});
   }
 
-  // 4. Production safety gates: mock payment AND mock OAuth must be unmounted (404)
+  // 4. Production safety gates: mock payment, mock OAuth & local media serve must be unmounted (404)
   if (expectProd) {
-    const [mockPayRes, mockOAuthRes] = await Promise.all([
+    const [mockPayRes, mockOAuthRes, localMediaRes] = await Promise.all([
       fetch(`${apiUrl}/api/v1/payments/mock/complete`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -139,6 +153,7 @@ async function main() {
         `${apiUrl}/api/v1/auth/google/mock-authorize?state=smoke&nonce=smoke&code_challenge=smoke`,
         { redirect: 'manual' }
       ),
+      fetch(`${apiUrl}/api/v1/media/local/bikes/probe/sample.png`),
     ]);
     assert(
       mockPayRes.status === 404,
@@ -147,6 +162,10 @@ async function main() {
     assert(
       mockOAuthRes.status === 404,
       `Expected /api/v1/auth/google/mock-authorize to return 404 in production, got ${mockOAuthRes.status}`
+    );
+    assert(
+      localMediaRes.status === 404,
+      `Expected /api/v1/media/local/* to return 404 in production, got ${localMediaRes.status}`
     );
   }
 
@@ -157,6 +176,8 @@ async function main() {
     `/bikes/${firstBike.slug}`,
     '/compare',
     '/accessories',
+    '/accessories?sku=ACC-ZETA-LINK-30',
+    '/cart',
     '/policies/ordering',
     '/policies/terms',
     '/policies/warranty',
@@ -195,8 +216,10 @@ async function main() {
         availableQty: firstBike.availableQty,
       },
       chatbotCitationsCount: assistantMsg.citations.length,
+      mediaFieldsVerified: true,
       mockPaymentBlocked404: expectProd,
       mockOAuthBlocked404: expectProd,
+      localMediaBlocked404: expectProd,
       webRoutes: routeChecks,
     })
   );

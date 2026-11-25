@@ -111,11 +111,11 @@ flowchart TD
   3. **Full Verification & Docker Prod Stack:**
      - Build và chạy `docker compose -f docker-compose.prod.yml up -d --build --wait` → chạy `node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 --expect-prod` → dọn prod stack & khôi phục dev containers.
 - **Definition of Done (DoD) — Phase 13C:**
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm audit --prod --audit-level=high && pnpm audit --audit-level=high` thoát mã `0`.
-  - [ ] `pnpm test:unit` pass 100% (`< 5s`).
-  - [ ] `pnpm test:integration` (Supertest, chạy với `ENABLE_MOCK_OAUTH=true` & `GOOGLE_OAUTH_ENABLED=true`) pass 100% 2 lần liên tiếp.
-  - [ ] `pnpm test:system` (Playwright Chromium, **7/7 E2E specs**) pass 100%.
-  - [ ] `docker compose -f docker-compose.prod.yml up -d --build --wait` đạt `healthy` cả 4 containers và `smoke-stack.mjs --expect-prod` trả `"status": "PASSED"`.
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm audit --prod --audit-level=high && pnpm audit --audit-level=high` thoát mã `0`.
+  - [x] `pnpm test:unit` pass 100% (`< 5s`).
+  - [x] `pnpm test:integration` (Supertest, chạy với `ENABLE_MOCK_OAUTH=true` & `GOOGLE_OAUTH_ENABLED=true`) pass 100% 2 lần liên tiếp.
+  - [x] `pnpm test:system` (Playwright Chromium, **7/7 E2E specs**) pass 100%.
+  - [x] `docker compose -f docker-compose.prod.yml up -d --build --wait` đạt `healthy` cả 4 containers và `smoke-stack.mjs --expect-prod` trả `"status": "PASSED"`.
   - [ ] Toàn bộ CI/CD workflows trên GitHub Actions xanh 100% sau khi push bản `v2.1.0`.
 
 ---

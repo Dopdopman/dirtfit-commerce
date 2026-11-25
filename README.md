@@ -12,7 +12,8 @@ A specialized e-commerce platform for **Off-Road, Motocross, Enduro, Dual-Sport,
 - **Grounded AI Support Chatbot (`SupportChatWidget.jsx`) & `@dirtfit/knowledge`:** Zero-hallucination grounded pipeline backed by local bilingual EN/VI BM25 policy retrieval, `CatalogCache`, and real `@dirtfit/ergonomics-engine` evaluations; supports Google Gemini Free Tier (`gemini-2.5-flash`) with instant `GroundedFallbackAdapter` protection, prompt-injection pre-filtering, clickable `/policies/*` citations, interactive Mini Fit Cards, and anonymous-to-authenticated session merge.
 - **Google OAuth 2.0 + OIDC & Security:** Authorization Code + PKCE S256 + encrypted `df_oauth_tx` cookie + 60s Redis One-Time Ticket cross-origin handoff, Argon2id password hashing, Refresh Token Rotation with family-wide Reuse Detection, in-memory JWT + Single-Flight Refresh Queue, 4KB Magic Bytes media inspection, RFC 7807 `application/problem+json` errors, and immutable `AuditLog`.
 - **High-Concurrency Inventory & Payments:** PostgreSQL `SELECT ... FOR UPDATE` row locking sorted deterministically to eliminate deadlocks, inline **Lazy Expiration** reclaiming expired 15-minute holds without waiting for cron, `Idempotency-Key` checkout protection, PayOS HMAC webhooks, COD eligibility guard (`<= 20,000,000 VND`, accessories only), and non-prod Mock payment adapter.
-- **Bilingual Storefront (EN Default / VI) & Admin Portal (`/admin/*`):** Cookie-persisted SSR + client EN/VI switching, Industrial Technical Dashboard, Bike & Geometry CRUD, **Interactive 6-Anchor UV Blueprint Calibration Tool**, Compatibility Matrix editor, Order State Machine controls, 3-Showroom Test Ride scheduler, and `ADMIN`-only Audit Log diff & anonymized Chat Metrics.
+- **Real Product Media Gallery & Rich Cart UX (`v2.1`):** Strictly separates commercial product photography (`HERO` / `GALLERY` -> `coverImageUrl`, `galleryImages` with Radix Lightbox + automatic 2D Parametric Wireframe fallback) from `SIDE_PROFILE_BLUEPRINT` 2D calibration imagery; adds full Cloudflare R2 upload lifecycle (`Presign -> PUT -> 4KB Magic Bytes`) for both Motorcycles and Accessories (`/admin/bikes/[id]`, `/admin/accessories`), and enriches `/cart`, `/checkout`, `/account` Orders, `/admin/orders`, and Chatbot `MiniFitCard` with live thumbnails and canonical `?sku=` deep-links.
+- **Bilingual Storefront (EN Default / VI) & Admin Portal (`/admin/*`):** Cookie-persisted SSR + client EN/VI switching, Industrial Technical Dashboard, Bike & Geometry CRUD, **Real Photo Gallery Manager + Interactive 6-Anchor UV Blueprint Calibration Tool**, Compatibility Matrix editor, Order State Machine controls, 3-Showroom Test Ride scheduler, and `ADMIN`-only Audit Log diff & anonymized Chat Metrics.
 
 ---
 
@@ -45,7 +46,7 @@ dirtfit-commerce/
 │   └── system/                 # Tier 3: Playwright Chromium E2E specs (Pure JS ESM)
 ├── docs/
 │   ├── DEPLOYMENT_FREE_TIER.md # Step-by-step $0/month production deployment & runbook
-│   └── architecture/           # Single Source of Truth master architecture docs (00–11)
+│   └── architecture/           # Single Source of Truth master architecture docs (00–13)
 ├── scripts/
 │   ├── check-pure-js.mjs       # Workspace guardrail blocking TypeScript artifacts
 │   └── smoke-stack.mjs         # Live full-stack HTTP & API integration smoke check
@@ -119,7 +120,7 @@ pnpm dev
 | `pnpm dev`                             | Run Fastify API & Next.js Web concurrently in watch mode                     |
 | `pnpm test:unit`                       | Tier 1: Run fast parallel unit tests across all 5 packages (0 DB/Redis)      |
 | `pnpm test:integration`                | Tier 2: Run sequential Supertest HTTP integration suites (Postgres + Redis)  |
-| `pnpm test:system`                     | Tier 3: Run 6 Playwright Chromium end-to-end specs against API + Web         |
+| `pnpm test:system`                     | Tier 3: Run 7 Playwright Chromium end-to-end specs against API + Web         |
 | `pnpm test`                            | Run Tier 1 (`test:unit`) + Tier 2 (`test:integration`)                       |
 | `pnpm check:pure-js`                   | Verify 100% Pure JavaScript ESM compliance across all files & `package.json` |
 | `pnpm lint`                            | Run ESLint with JSDoc, React, and React Hooks rules (zero warnings policy)   |
@@ -135,3 +136,4 @@ pnpm dev
 - **\$0/Month Free Tier Deployment & Operations Guide:** [`docs/DEPLOYMENT_FREE_TIER.md`](./docs/DEPLOYMENT_FREE_TIER.md)
 - **Master Architecture Index:** [`docs/architecture/README.md`](./docs/architecture/README.md)
 - **v2.0 Expansion Roadmap & DoD Checklists:** [`docs/architecture/11-v2-expansion-roadmap.md`](./docs/architecture/11-v2-expansion-roadmap.md)
+- **v2.1 Real Product Media & Rich Cart Architecture / Roadmap:** [`docs/architecture/12-real-product-media-and-rich-cart.md`](./docs/architecture/12-real-product-media-and-rich-cart.md) · [`docs/architecture/13-v21-media-cart-roadmap.md`](./docs/architecture/13-v21-media-cart-roadmap.md)
