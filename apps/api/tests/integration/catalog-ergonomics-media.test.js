@@ -89,62 +89,64 @@ describe('Phase 4 Catalog, Smart Rider-Fit, Ergonomics API, Cache Invalidation &
       return;
     }
 
-    if (createdOrderIds.length > 0) {
-      await app.prisma.inventoryReservation.deleteMany({
-        where: { orderId: { in: createdOrderIds } },
-      });
-      await app.prisma.order.deleteMany({
-        where: { id: { in: createdOrderIds } },
-      });
-    }
-
-    if (createdMediaIds.length > 0) {
-      await app.prisma.bikeMedia.deleteMany({
-        where: { id: { in: createdMediaIds } },
-      });
-    }
-
-    if (createdAccessoryIds.length > 0) {
-      await app.prisma.accessory.deleteMany({
-        where: { id: { in: createdAccessoryIds } },
-      });
-    }
-
-    if (createdBikeIds.length > 0) {
-      await app.prisma.bike.deleteMany({
-        where: { id: { in: createdBikeIds } },
-      });
-    }
-
-    const auditTargets = [
-      ...createdAuditEntityIds,
-      ...createdBikeIds,
-      ...createdAccessoryIds,
-      ...createdMediaIds,
-    ];
-    if (auditTargets.length > 0) {
-      await app.prisma.auditLog.deleteMany({
-        where: { entityId: { in: auditTargets } },
-      });
-    }
-
-    // Ensure test keys don't linger in Redis catalog cache
-    let cursor = '0';
-    do {
-      const [nextCursor, keys] = await app.redis.scan(
-        cursor,
-        'MATCH',
-        'df:catalog:*',
-        'COUNT',
-        100
-      );
-      cursor = nextCursor;
-      if (keys.length > 0) {
-        await app.redis.del(...keys);
+    try {
+      if (createdOrderIds.length > 0) {
+        await app.prisma.inventoryReservation.deleteMany({
+          where: { orderId: { in: createdOrderIds } },
+        });
+        await app.prisma.order.deleteMany({
+          where: { id: { in: createdOrderIds } },
+        });
       }
-    } while (cursor !== '0');
 
-    await app.close();
+      if (createdMediaIds.length > 0) {
+        await app.prisma.bikeMedia.deleteMany({
+          where: { id: { in: createdMediaIds } },
+        });
+      }
+
+      if (createdAccessoryIds.length > 0) {
+        await app.prisma.accessory.deleteMany({
+          where: { id: { in: createdAccessoryIds } },
+        });
+      }
+
+      if (createdBikeIds.length > 0) {
+        await app.prisma.bike.deleteMany({
+          where: { id: { in: createdBikeIds } },
+        });
+      }
+
+      const auditTargets = [
+        ...createdAuditEntityIds,
+        ...createdBikeIds,
+        ...createdAccessoryIds,
+        ...createdMediaIds,
+      ];
+      if (auditTargets.length > 0) {
+        await app.prisma.auditLog.deleteMany({
+          where: { entityId: { in: auditTargets } },
+        });
+      }
+
+      // Ensure test keys don't linger in Redis catalog cache
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await app.redis.scan(
+          cursor,
+          'MATCH',
+          'df:catalog:*',
+          'COUNT',
+          100
+        );
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await app.redis.del(...keys);
+        }
+      } while (cursor !== '0');
+    } finally {
+      await app.close();
+    }
   });
 
   it('serves Public Catalog with category/Smart Rider-Fit filters, JSON-safe Number VND, soft-delete exclusion & Lazy Expiration', async () => {

@@ -187,71 +187,94 @@ describe('Phase 5 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, Pay
       return;
     }
 
-    if (createdTestRideIds.length > 0) {
-      await app.prisma.testRideBooking.deleteMany({
-        where: { id: { in: createdTestRideIds } },
-      });
+    try {
+      if (createdTestRideIds.length > 0) {
+        await app.prisma.testRideBooking.deleteMany({
+          where: { id: { in: createdTestRideIds } },
+        });
+      }
+
+      const orderIdsFromUsers =
+        createdUserIds.length > 0
+          ? (
+              await app.prisma.order.findMany({
+                where: { userId: { in: createdUserIds } },
+                select: { id: true },
+              })
+            ).map((o) => o.id)
+          : [];
+      const allOrderIds = Array.from(new Set([...createdOrderIds, ...orderIdsFromUsers]));
+
+      if (allOrderIds.length > 0) {
+        await app.prisma.paymentTransaction.deleteMany({
+          where: { orderId: { in: allOrderIds } },
+        });
+        await app.prisma.inventoryReservation.deleteMany({
+          where: { orderId: { in: allOrderIds } },
+        });
+        await app.prisma.orderItem.deleteMany({
+          where: { orderId: { in: allOrderIds } },
+        });
+        await app.prisma.order.deleteMany({
+          where: { id: { in: allOrderIds } },
+        });
+      }
+
+      if (createdUserIds.length > 0) {
+        await app.prisma.idempotencyKey.deleteMany({
+          where: { userId: { in: createdUserIds } },
+        });
+        await app.prisma.cart.deleteMany({
+          where: { userId: { in: createdUserIds } },
+        });
+        await app.prisma.user.deleteMany({
+          where: { id: { in: createdUserIds } },
+        });
+      }
+
+      const auditEntityIds = [...allOrderIds, ...createdBikeIds, ...createdAccessoryIds];
+      if (createdUserIds.length > 0 || auditEntityIds.length > 0) {
+        const auditWhereConditions = [];
+        if (createdUserIds.length > 0) {
+          auditWhereConditions.push({ actorId: { in: createdUserIds } });
+        }
+        if (auditEntityIds.length > 0) {
+          auditWhereConditions.push({ entityId: { in: auditEntityIds } });
+        }
+        await app.prisma.auditLog.deleteMany({
+          where: { OR: auditWhereConditions },
+        });
+      }
+
+      if (createdAccessoryIds.length > 0) {
+        await app.prisma.accessory.deleteMany({
+          where: { id: { in: createdAccessoryIds } },
+        });
+      }
+
+      if (createdBikeIds.length > 0) {
+        await app.prisma.bike.deleteMany({
+          where: { id: { in: createdBikeIds } },
+        });
+      }
+
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await app.redis.scan(
+          cursor,
+          'MATCH',
+          'df:catalog:*',
+          'COUNT',
+          100
+        );
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await app.redis.del(...keys);
+        }
+      } while (cursor !== '0');
+    } finally {
+      await app.close();
     }
-
-    const orderIdsFromUsers =
-      createdUserIds.length > 0
-        ? (
-            await app.prisma.order.findMany({
-              where: { userId: { in: createdUserIds } },
-              select: { id: true },
-            })
-          ).map((o) => o.id)
-        : [];
-    const allOrderIds = Array.from(new Set([...createdOrderIds, ...orderIdsFromUsers]));
-
-    if (allOrderIds.length > 0) {
-      await app.prisma.paymentTransaction.deleteMany({
-        where: { orderId: { in: allOrderIds } },
-      });
-      await app.prisma.inventoryReservation.deleteMany({
-        where: { orderId: { in: allOrderIds } },
-      });
-      await app.prisma.orderItem.deleteMany({
-        where: { orderId: { in: allOrderIds } },
-      });
-      await app.prisma.order.deleteMany({
-        where: { id: { in: allOrderIds } },
-      });
-    }
-
-    if (createdUserIds.length > 0) {
-      await app.prisma.idempotencyKey.deleteMany({
-        where: { userId: { in: createdUserIds } },
-      });
-      await app.prisma.cart.deleteMany({
-        where: { userId: { in: createdUserIds } },
-      });
-      await app.prisma.auditLog.deleteMany({
-        where: {
-          OR: [
-            { actorId: { in: createdUserIds } },
-            { entityId: { in: [...allOrderIds, ...createdBikeIds, ...createdAccessoryIds] } },
-          ],
-        },
-      });
-      await app.prisma.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-
-    if (createdAccessoryIds.length > 0) {
-      await app.prisma.accessory.deleteMany({
-        where: { id: { in: createdAccessoryIds } },
-      });
-    }
-
-    if (createdBikeIds.length > 0) {
-      await app.prisma.bike.deleteMany({
-        where: { id: { in: createdBikeIds } },
-      });
-    }
-
-    await app.close();
   });
 
   it('prevents overselling via sorted SELECT FOR UPDATE when 5 users race for stockQty=1 bike, and supports combo cart', async () => {

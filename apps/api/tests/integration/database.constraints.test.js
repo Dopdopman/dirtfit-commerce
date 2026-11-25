@@ -6,13 +6,27 @@ import { SHOWROOM_CODES, mapMoneyFieldsToNumbers, toSafeVndNumber } from '@dirtf
 
 const prisma = new PrismaClient();
 
+const SEEDED_BIKE_SLUGS = [
+  'honda-crf150l',
+  'honda-crf300l',
+  'yamaha-wr155r',
+  'kawasaki-klx230',
+  'ktm-350-exc-f',
+  'husqvarna-fe-350',
+  'yamaha-tenere-700',
+  'honda-crf250r',
+];
+
 describe('Phase 2 Database Constraints, Seed Integrity & Engine Integration', () => {
   let seededBikes = [];
   let seededCustomer = null;
 
   beforeAll(async () => {
     seededBikes = await prisma.bike.findMany({
-      where: { deletedAt: null },
+      where: {
+        slug: { in: SEEDED_BIKE_SLUGS },
+        deletedAt: null,
+      },
       include: {
         brand: true,
         geometrySpec: true,
@@ -35,7 +49,7 @@ describe('Phase 2 Database Constraints, Seed Integrity & Engine Integration', ()
   });
 
   it('verifies idempotent seed baseline: 8 real-world bikes, 3 showrooms, and Argon2id users', async () => {
-    expect(seededBikes.length).toBeGreaterThanOrEqual(8);
+    expect(seededBikes).toHaveLength(SEEDED_BIKE_SLUGS.length);
 
     const expectedBikeNames = [
       'Honda CRF150L',
