@@ -154,6 +154,27 @@ enum OAuthProvider {
   GOOGLE
 }
 
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum ChatFeedback {
+  UP
+  DOWN
+}
+
+enum ChatIntent {
+  POLICY_ORDERING
+  POLICY_TERMS
+  POLICY_WARRANTY
+  RIDER_FIT_ADVICE
+  CATALOG_PRICING
+  SHOWROOM_TEST_RIDE
+  ORDER_STATUS_HELP
+  OUT_OF_SCOPE
+}
+
 // ============================================================================
 // 1. AUTHENTICATION, USERS & BODY PROFILES
 // ============================================================================
@@ -175,6 +196,7 @@ model User {
 
   refreshTokens     RefreshToken[]
   oauthAccounts     OAuthAccount[]
+  chatSessions      ChatSession[]
   bodyProfiles      UserBodyProfile[]
   cart              Cart?
   orders            Order[]
@@ -630,4 +652,45 @@ model AuditLog {
   @@index([actorId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
   @@map("audit_logs")
+}
+
+// ============================================================================
+// 6. AI SUPPORT CHATBOT SESSIONS & GROUNDED MESSAGES
+// ============================================================================
+
+model ChatSession {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String?       @map("user_id") @db.Uuid
+  guestTokenHash String?       @unique @map("guest_token_hash") @db.VarChar(64)
+  locale         String        @default("en") @db.VarChar(8)
+  lastActiveAt   DateTime      @default(now()) @map("last_active_at")
+  expiresAt      DateTime      @map("expires_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       ChatMessage[]
+
+  @@index([userId, lastActiveAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id                   String          @id @default(uuid()) @db.Uuid
+  sessionId            String          @map("session_id") @db.Uuid
+  role                 ChatMessageRole
+  content              String          @db.Text
+  intent               ChatIntent?
+  citationsJson        Json?           @map("citations_json")
+  recommendedBikesJson Json?           @map("recommended_bikes_json")
+  provider             String?         @db.VarChar(32)
+  latencyMs            Int?            @map("latency_ms")
+  feedback             ChatFeedback?
+  createdAt            DateTime        @default(now()) @map("created_at")
+
+  session              ChatSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt(sort: Asc)])
+  @@map("chat_messages")
 }

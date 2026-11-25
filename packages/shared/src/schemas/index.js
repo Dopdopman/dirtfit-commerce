@@ -7,3 +7,4 @@ export * from './media.schema.js';
 export * from './cart.schema.js';
 export * from './order.schema.js';
 export * from './test-ride.schema.js';
+export * from './chat.schema.js';

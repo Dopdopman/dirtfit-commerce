@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import ColdStartNotice from '@/components/layout/ColdStartNotice';
 import SiteFooter from '@/components/layout/SiteFooter';
 import SiteHeader from '@/components/layout/SiteHeader';
+import SupportChatWidget from '@/components/chat/SupportChatWidget';
 
 /**
  * Conditionally wraps public storefront routes with Header/Footer/ColdStartNotice,
@@ -26,6 +27,7 @@ export default function StorefrontShell({ children }) {
       <SiteHeader />
       <main className="flex-1">{children}</main>
       <SiteFooter />
+      <SupportChatWidget />
     </>
   );
 }

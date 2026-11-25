@@ -68,6 +68,13 @@ const EnvSchema = z
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     GOOGLE_CALLBACK_URL: z.string().url().optional(),
     OAUTH_STATE_SECRET: z.string().min(32).optional(),
+
+    CHAT_PROVIDER: z.enum(['auto', 'gemini', 'fallback']).default('auto'),
+    GEMINI_API_KEY: z.string().optional(),
+    GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+    CHAT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(12000),
+    CHAT_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(300).default(15),
+    CHAT_GUEST_SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ENABLE_MOCK_OAUTH) {
@@ -199,6 +206,12 @@ export function loadEnv(overrides = {}) {
     GOOGLE_CLIENT_SECRET: rawSource.GOOGLE_CLIENT_SECRET || undefined,
     GOOGLE_CALLBACK_URL: rawSource.GOOGLE_CALLBACK_URL || undefined,
     OAUTH_STATE_SECRET: rawSource.OAUTH_STATE_SECRET || undefined,
+    CHAT_PROVIDER: rawSource.CHAT_PROVIDER,
+    GEMINI_API_KEY: rawSource.GEMINI_API_KEY || undefined,
+    GEMINI_MODEL: rawSource.GEMINI_MODEL,
+    CHAT_TIMEOUT_MS: rawSource.CHAT_TIMEOUT_MS,
+    CHAT_RATE_LIMIT_MAX: rawSource.CHAT_RATE_LIMIT_MAX,
+    CHAT_GUEST_SESSION_TTL_DAYS: rawSource.CHAT_GUEST_SESSION_TTL_DAYS,
   };
 
   const parsed = EnvSchema.safeParse(candidate);

@@ -102,11 +102,11 @@ flowchart TD
      - Mount trong `StorefrontShell.jsx` (tự động ẩn trên `/admin/*`), hỗ trợ Quick Prompts EN/VI, Citation Chips, Mini Fit Card, Copy, Feedback `👍👎`, Reset phiên chat, đồng bộ khi đăng nhập/đăng xuất.
   4. **Tests:** `apps/api/tests/unit/chatbot-engine.test.js`, `apps/web/tests/chat-renderer.test.js`, và `apps/api/tests/integration/chatbot-grounded.test.js`.
 - **Definition of Done (DoD):**
-  - [ ] Mọi câu hỏi về chính sách trả về `citations[]` thật trỏ tới `/policies/*` khớp `locale` hiện tại.
-  - [ ] Câu hỏi tư vấn vóc dáng trả về `recommendedBikes[]` có `effectiveSeatHeightMm` và `contactStatus` khớp 100% kết quả của `@dirtfit/ergonomics-engine`.
-  - [ ] Prompt Injection, XSS payload, IDOR cross-user feedback/session đều bị chặn có kiểm chứng test tự động; Rate Limit `429` hoạt động trên Redis.
-  - [ ] Khi không có `GEMINI_API_KEY` (hoặc mô phỏng Gemini trả `429`/timeout), hệ thống tự chuyển mượt sang `GroundedFallbackAdapter` và vẫn trả kết quả đầy đủ citations.
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm test` thoát mã `0`.
+  - [x] Mọi câu hỏi về chính sách trả về `citations[]` thật trỏ tới `/policies/*` khớp `locale` hiện tại.
+  - [x] Câu hỏi tư vấn vóc dáng trả về `recommendedBikes[]` có `effectiveSeatHeightMm` và `contactStatus` khớp 100% kết quả của `@dirtfit/ergonomics-engine`.
+  - [x] Prompt Injection, XSS payload, IDOR cross-user feedback/session đều bị chặn có kiểm chứng test tự động; Rate Limit `429` hoạt động trên Redis.
+  - [x] Khi không có `GEMINI_API_KEY` (hoặc mô phỏng Gemini trả `429`/timeout), hệ thống tự chuyển mượt sang `GroundedFallbackAdapter` và vẫn trả kết quả đầy đủ citations.
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm test` thoát mã `0`.
 
 ---
 

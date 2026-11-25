@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { STANCE_MODES } from '@dirtfit/ergonomics-engine/constants';
 import { Moon, RotateCcw, ShoppingCart, Sun } from 'lucide-react';
 import ParametricBikeSvg from '@/components/simulator/ParametricBikeSvg';
@@ -37,6 +37,30 @@ export default function RiderFitSimulator({ bike }) {
     barRiserMm: 0,
   });
   const [bundleBusy, setBundleBusy] = useState(false);
+
+  // Sync optional ?heightCm=...&weightKg=...&inseamCm=... links opened from AI Support Chat MiniFitCard
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const hRaw = Number(params.get('heightCm'));
+    const wRaw = Number(params.get('weightKg'));
+    const iRaw = Number(params.get('inseamCm'));
+
+    const updates = {};
+    if (Number.isFinite(hRaw) && hRaw >= 135 && hRaw <= 220) {
+      updates.heightCm = Math.round(hRaw);
+    }
+    if (Number.isFinite(wRaw) && wRaw >= 35 && wRaw <= 160) {
+      updates.weightKg = Math.round(wRaw);
+    }
+    if (Number.isFinite(iRaw) && iRaw >= 55 && iRaw <= 115) {
+      updates.inseamCm = Math.round(iRaw);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      setRiderProfile((prev) => ({ ...prev, ...updates }));
+    }
+  }, [setRiderProfile]);
 
   const compatibleEngineInputs = useMemo(() => {
     return (bike.compatibilities ?? [])

@@ -95,3 +95,15 @@ services:
         sync: false
       - key: OAUTH_STATE_SECRET
         generateValue: true
+      - key: CHAT_PROVIDER
+        value: auto
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: CHAT_TIMEOUT_MS
+        value: 12000
+      - key: CHAT_RATE_LIMIT_MAX
+        value: 15
+      - key: CHAT_GUEST_SESSION_TTL_DAYS
+        value: 7

@@ -7,6 +7,8 @@ import auditRoutes from './modules/audit/audit.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import catalogRoutes from './modules/catalog/catalog.routes.js';
+import chatbotRoutes from './modules/chatbot/chatbot.routes.js';
+import { getChatbotPrompts } from './modules/chatbot/prompts/prompt-loader.js';
 import healthRoutes from './modules/health/health.routes.js';
 import ordersRoutes from './modules/orders/orders.routes.js';
 import paymentsRoutes from './modules/payments/payments.routes.js';
@@ -41,6 +43,9 @@ export async function buildApp(options = {}) {
   const env = loadEnv(options.envOverrides);
   const enableLogger = options.logger ?? env.NODE_ENV !== 'test';
 
+  // Fail-fast validation of chatbot prompt templates on startup
+  getChatbotPrompts();
+
   const app = Fastify({
     trustProxy: true,
     genReqId: (req) => {
@@ -71,6 +76,11 @@ export async function buildApp(options = {}) {
               '*.ticket',
               '*.rawTicket',
               '*.oauthStateSecret',
+              '*.geminiApiKey',
+              '*.apiKey',
+              '*.GEMINI_API_KEY',
+              'req.headers["x-goog-api-key"]',
+              '*.x-goog-api-key',
             ],
             censor: '[REDACTED]',
           },
@@ -116,6 +126,7 @@ export async function buildApp(options = {}) {
       await api.register(sweeperRoutes);
       await api.register(uploadsRoutes);
       await api.register(auditRoutes);
+      await api.register(chatbotRoutes);
     },
     { prefix: '/api/v1' }
   );

@@ -10,6 +10,27 @@ export const OAUTH_PROVIDERS = Object.freeze({
   GOOGLE: 'GOOGLE',
 });
 
+export const CHAT_ROLES = Object.freeze({
+  USER: 'USER',
+  ASSISTANT: 'ASSISTANT',
+});
+
+export const CHAT_FEEDBACK = Object.freeze({
+  UP: 'UP',
+  DOWN: 'DOWN',
+});
+
+export const CHAT_INTENTS = Object.freeze({
+  POLICY_ORDERING: 'POLICY_ORDERING',
+  POLICY_TERMS: 'POLICY_TERMS',
+  POLICY_WARRANTY: 'POLICY_WARRANTY',
+  RIDER_FIT_ADVICE: 'RIDER_FIT_ADVICE',
+  CATALOG_PRICING: 'CATALOG_PRICING',
+  SHOWROOM_TEST_RIDE: 'SHOWROOM_TEST_RIDE',
+  ORDER_STATUS_HELP: 'ORDER_STATUS_HELP',
+  OUT_OF_SCOPE: 'OUT_OF_SCOPE',
+});
+
 export const GENDERS = Object.freeze({
   MALE: 'MALE',
   FEMALE: 'FEMALE',

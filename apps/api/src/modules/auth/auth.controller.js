@@ -1,6 +1,8 @@
 import { AppError, ERROR_CODES } from '@dirtfit/shared';
 import { sendSuccess } from '../../common/http/envelope.js';
 import { mergeGuestCartToUser } from '../cart/cart.repository.js';
+import { hashGuestChatToken, mergeGuestChatSessionToUser } from '../chatbot/chatbot.repository.js';
+import { CHAT_GUEST_COOKIE } from '../chatbot/chatbot.routes.js';
 import {
   getAuthenticatedMe,
   loginUser,
@@ -111,7 +113,16 @@ async function mergeGuestSessionsAfterAuth(request, reply, userId) {
     await mergeGuestCartToUser(request.server.prisma, guestCartToken, userId);
     reply.clearCookie(GUEST_CART_COOKIE_NAME, { path: '/api/v1' });
   }
-  // Phase 11 hook: merge df_chat_guest cookie into user ChatSession here
+
+  const rawGuestChatToken = request.cookies?.[CHAT_GUEST_COOKIE];
+  if (typeof rawGuestChatToken === 'string' && rawGuestChatToken.length >= 16) {
+    const guestTokenHash = hashGuestChatToken(
+      rawGuestChatToken,
+      request.server.env.REFRESH_TOKEN_PEPPER
+    );
+    await mergeGuestChatSessionToUser(request.server.prisma, guestTokenHash, userId);
+    reply.clearCookie(CHAT_GUEST_COOKIE, { path: '/api/v1' });
+  }
 }
 
 /**

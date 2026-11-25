@@ -28,11 +28,11 @@ export function verifyCronSecret(providedSecret, expectedSecret) {
 }
 
 /**
- * Sweep expired ACTIVE inventory reservations using FOR UPDATE SKIP LOCKED
- * and transition stale PENDING_PAYMENT orders to EXPIRED.
+ * Sweep expired ACTIVE inventory reservations using FOR UPDATE SKIP LOCKED,
+ * transition stale PENDING_PAYMENT orders to EXPIRED, and purge expired anonymous chat sessions.
  * @param {import('fastify').FastifyInstance} app
  * @param {object} auditCtx
- * @returns {Promise<{ sweptReservations: number, expiredOrders: number }>}
+ * @returns {Promise<{ sweptReservations: number, expiredOrders: number, sweptChatSessions: number }>}
  */
 export async function sweepExpiredReservations(app, auditCtx) {
   const result = await app.prisma.$transaction(
@@ -47,103 +47,112 @@ export async function sweepExpiredReservations(app, auditCtx) {
         FOR UPDATE SKIP LOCKED
       `;
 
-      if (expiredRows.length === 0) {
-        return { sweptReservations: 0, expiredOrders: 0 };
-      }
+      let expiredOrders = 0;
 
-      const bikeTotals = new Map();
-      const accTotals = new Map();
-      const orderIds = new Set();
+      if (expiredRows.length > 0) {
+        const bikeTotals = new Map();
+        const accTotals = new Map();
+        const orderIds = new Set();
 
-      for (const row of expiredRows) {
-        orderIds.add(row.order_id);
-        if (row.item_type === 'BIKE' && row.bike_id) {
-          bikeTotals.set(row.bike_id, (bikeTotals.get(row.bike_id) ?? 0) + Number(row.quantity));
+        for (const row of expiredRows) {
+          orderIds.add(row.order_id);
+          if (row.item_type === 'BIKE' && row.bike_id) {
+            bikeTotals.set(row.bike_id, (bikeTotals.get(row.bike_id) ?? 0) + Number(row.quantity));
+          }
+          if (row.item_type === 'ACCESSORY' && row.accessory_id) {
+            accTotals.set(
+              row.accessory_id,
+              (accTotals.get(row.accessory_id) ?? 0) + Number(row.quantity)
+            );
+          }
         }
-        if (row.item_type === 'ACCESSORY' && row.accessory_id) {
-          accTotals.set(
-            row.accessory_id,
-            (accTotals.get(row.accessory_id) ?? 0) + Number(row.quantity)
-          );
+
+        const sortedBikeIds = Array.from(bikeTotals.keys()).sort();
+        const sortedAccIds = Array.from(accTotals.keys()).sort();
+
+        if (sortedBikeIds.length > 0) {
+          await tx.$queryRaw`
+            SELECT id FROM bikes
+            WHERE id IN (${Prisma.join(sortedBikeIds.map((id) => Prisma.sql`${id}::uuid`))})
+            ORDER BY id ASC
+            FOR UPDATE
+          `;
+          for (const bikeId of sortedBikeIds) {
+            const releaseQty = bikeTotals.get(bikeId);
+            await tx.$executeRaw`
+              UPDATE bikes
+              SET reserved_qty = GREATEST(0, reserved_qty - ${releaseQty}), version = version + 1
+              WHERE id = ${bikeId}::uuid
+            `;
+          }
         }
-      }
 
-      const sortedBikeIds = Array.from(bikeTotals.keys()).sort();
-      const sortedAccIds = Array.from(accTotals.keys()).sort();
+        if (sortedAccIds.length > 0) {
+          await tx.$queryRaw`
+            SELECT id FROM accessories
+            WHERE id IN (${Prisma.join(sortedAccIds.map((id) => Prisma.sql`${id}::uuid`))})
+            ORDER BY id ASC
+            FOR UPDATE
+          `;
+          for (const accId of sortedAccIds) {
+            const releaseQty = accTotals.get(accId);
+            await tx.$executeRaw`
+              UPDATE accessories
+              SET reserved_qty = GREATEST(0, reserved_qty - ${releaseQty}), version = version + 1
+              WHERE id = ${accId}::uuid
+            `;
+          }
+        }
 
-      if (sortedBikeIds.length > 0) {
-        await tx.$queryRaw`
-          SELECT id FROM bikes
-          WHERE id IN (${Prisma.join(sortedBikeIds.map((id) => Prisma.sql`${id}::uuid`))})
-          ORDER BY id ASC
-          FOR UPDATE
+        const resIds = expiredRows.map((r) => r.id);
+        await tx.$executeRaw`
+          UPDATE inventory_reservations
+          SET status = 'EXPIRED', resolved_at = NOW()
+          WHERE id IN (${Prisma.join(resIds.map((id) => Prisma.sql`${id}::uuid`))})
         `;
-        for (const bikeId of sortedBikeIds) {
-          const releaseQty = bikeTotals.get(bikeId);
-          await tx.$executeRaw`
-            UPDATE bikes
-            SET reserved_qty = GREATEST(0, reserved_qty - ${releaseQty}), version = version + 1
-            WHERE id = ${bikeId}::uuid
+
+        const orderIdList = Array.from(orderIds).sort();
+        if (orderIdList.length > 0) {
+          expiredOrders = await tx.$executeRaw`
+            UPDATE orders o
+            SET status = 'EXPIRED', updated_at = NOW()
+            WHERE o.id IN (${Prisma.join(orderIdList.map((id) => Prisma.sql`${id}::uuid`))})
+              AND o.status = 'PENDING_PAYMENT'
+              AND NOT EXISTS (
+                SELECT 1 FROM inventory_reservations r
+                WHERE r.order_id = o.id
+                  AND r.status = 'ACTIVE'
+                  AND r.expires_at > NOW()
+              )
           `;
         }
       }
 
-      if (sortedAccIds.length > 0) {
-        await tx.$queryRaw`
-          SELECT id FROM accessories
-          WHERE id IN (${Prisma.join(sortedAccIds.map((id) => Prisma.sql`${id}::uuid`))})
-          ORDER BY id ASC
-          FOR UPDATE
-        `;
-        for (const accId of sortedAccIds) {
-          const releaseQty = accTotals.get(accId);
-          await tx.$executeRaw`
-            UPDATE accessories
-            SET reserved_qty = GREATEST(0, reserved_qty - ${releaseQty}), version = version + 1
-            WHERE id = ${accId}::uuid
-          `;
-        }
-      }
-
-      const resIds = expiredRows.map((r) => r.id);
-      await tx.$executeRaw`
-        UPDATE inventory_reservations
-        SET status = 'EXPIRED', resolved_at = NOW()
-        WHERE id IN (${Prisma.join(resIds.map((id) => Prisma.sql`${id}::uuid`))})
+      const sweptChatSessions = await tx.$executeRaw`
+        DELETE FROM chat_sessions
+        WHERE user_id IS NULL
+          AND expires_at <= NOW()
       `;
 
-      const orderIdList = Array.from(orderIds).sort();
-      let expiredOrders = 0;
-      if (orderIdList.length > 0) {
-        expiredOrders = await tx.$executeRaw`
-          UPDATE orders o
-          SET status = 'EXPIRED', updated_at = NOW()
-          WHERE o.id IN (${Prisma.join(orderIdList.map((id) => Prisma.sql`${id}::uuid`))})
-            AND o.status = 'PENDING_PAYMENT'
-            AND NOT EXISTS (
-              SELECT 1 FROM inventory_reservations r
-              WHERE r.order_id = o.id
-                AND r.status = 'ACTIVE'
-                AND r.expires_at > NOW()
-            )
-        `;
+      if (expiredRows.length > 0 || Number(sweptChatSessions) > 0) {
+        await recordAuditLog(tx, {
+          ...auditCtx,
+          action: 'RESERVATIONS_SWEPT',
+          entityType: 'InventoryReservation',
+          entityId: 'sweeper-batch',
+          beforeState: null,
+          afterState: {
+            sweptReservations: expiredRows.length,
+            expiredOrders: Number(expiredOrders),
+            sweptChatSessions: Number(sweptChatSessions),
+          },
+        });
       }
-
-      await recordAuditLog(tx, {
-        ...auditCtx,
-        action: 'RESERVATIONS_SWEPT',
-        entityType: 'InventoryReservation',
-        entityId: 'sweeper-batch',
-        beforeState: null,
-        afterState: {
-          sweptReservations: expiredRows.length,
-          expiredOrders: Number(expiredOrders),
-        },
-      });
 
       return {
         sweptReservations: expiredRows.length,
         expiredOrders: Number(expiredOrders),
+        sweptChatSessions: Number(sweptChatSessions),
       };
     },
     { maxWait: 10_000, timeout: 15_000 }
