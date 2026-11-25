@@ -1,0 +1,16 @@
+{
+  "name": "@dirtfit/knowledge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./constants": "./src/constants.js",
+    "./parser": "./src/parser.js",
+    "./retriever": "./src/retriever.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

@@ -60,13 +60,27 @@ export const EN_DICT = Object.freeze({
       'Specialized Motocross, Enduro, Dual-Sport, and Adventure motorcycles alongside lowering kits engineered with a millimeter-accurate 2D ergonomics simulator.',
     showroomsTitle: '3 Test Ride Showrooms',
     quickLinksTitle: 'Quick Links',
+    policiesTitle: 'Policies & Guides',
     links: {
       bikes: 'Motorcycles & Rider Fit',
       compare: 'Ghost Overlay Compare',
       accessories: 'Accessories & Lowering Kits',
       testRide: 'Book a Test Ride',
     },
+    policies: {
+      ordering: 'Ordering & Deposit Guide',
+      terms: 'Terms & Conditions',
+      warranty: 'Warranty & Returns',
+      riderFit: 'Rider-Fit Physics FAQ',
+    },
     bottomNote: 'DirtFit Commerce · Pure JS ESM Architecture · Precision Ergonomics Engine',
+  },
+  policies: {
+    navLabel: 'DirtFit policy documents',
+    tocTitle: 'On This Page',
+    quickActionsTitle: 'Interactive Tools',
+    versionLabel: 'Spec',
+    updatedLabel: 'Updated',
   },
   coldStart: {
     waking: 'Waking up the data server (Cold Start), please wait a moment...',

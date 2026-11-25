@@ -47,10 +47,10 @@ flowchart TD
   4. Tạo 3 trang Server Component trên `apps/web`: `/policies/ordering`, `/policies/terms`, `/policies/warranty` + component dùng chung `PolicyDocumentView.jsx` (Sticky TOC, render Markdown an toàn không dùng `dangerouslySetInnerHTML`, đọc cookie `dirtfit_locale`).
   5. Cập nhật `SiteFooter.jsx` & từ điển `en.js`/`vi.js` gắn liên kết tới 3 trang chính sách.
 - **Definition of Done (DoD):**
-  - [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
-  - [ ] `pnpm --filter @dirtfit/knowledge test` đạt 100% pass (xác nhận parity EN/VI và đủ 4 tài liệu).
-  - [ ] `pnpm --filter @dirtfit/web build` (chế độ standalone) thành công và xác nhận thư mục standalone chứa đủ file `.md` chính sách.
-  - [ ] Cả 3 đường dẫn `/policies/ordering`, `/policies/terms`, `/policies/warranty` trả HTTP `200` đúng ngôn ngữ cho cả cookie `dirtfit_locale=en` và `dirtfit_locale=vi`.
+  - [x] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
+  - [x] `pnpm --filter @dirtfit/knowledge test` đạt 100% pass (xác nhận parity EN/VI và đủ 4 tài liệu).
+  - [x] `pnpm --filter @dirtfit/web build` (chế độ standalone) thành công và xác nhận thư mục standalone chứa đủ file `.md` chính sách.
+  - [x] Cả 3 đường dẫn `/policies/ordering`, `/policies/terms`, `/policies/warranty` trả HTTP `200` đúng ngôn ngữ cho cả cookie `dirtfit_locale=en` và `dirtfit_locale=vi`.
 
 ---
 

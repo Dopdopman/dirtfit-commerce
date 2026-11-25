@@ -3,7 +3,10 @@ const nextConfig = {
   ...(process.env.NEXT_OUTPUT_STANDALONE === 'true' || process.platform !== 'win32'
     ? { output: 'standalone' }
     : {}),
-  transpilePackages: ['@dirtfit/ergonomics-engine', '@dirtfit/shared'],
+  transpilePackages: ['@dirtfit/ergonomics-engine', '@dirtfit/knowledge', '@dirtfit/shared'],
+  outputFileTracingIncludes: {
+    '/policies/**': ['../../packages/knowledge/content/**/*.md'],
+  },
   images: {
     unoptimized: true,
   },

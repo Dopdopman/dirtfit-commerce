@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { FOOTER_POLICY_LINKS } from '@dirtfit/knowledge/constants';
 import { SHOWROOMS } from '@dirtfit/shared/enums';
 import BrandLogo from '@/components/ui/BrandLogo';
 import { getShowroomMeta } from '@/lib/formatters';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
- * Clean Industrial Motorsport footer listing localized showrooms and quick links.
+ * Clean Industrial Motorsport footer listing localized showrooms, quick links, and policy docs.
  * @returns {import('react').JSX.Element}
  */
 export default function SiteFooter() {
@@ -25,7 +26,7 @@ export default function SiteFooter() {
           </p>
         </div>
 
-        <div className="md:col-span-5">
+        <div className="md:col-span-4">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-muted">
             {t('footer.showroomsTitle')}
           </h3>
@@ -42,7 +43,7 @@ export default function SiteFooter() {
           </ul>
         </div>
 
-        <div className="md:col-span-3">
+        <div className="md:col-span-2">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-muted">
             {t('footer.quickLinksTitle')}
           </h3>
@@ -67,6 +68,21 @@ export default function SiteFooter() {
                 {t('footer.links.testRide')}
               </Link>
             </li>
+          </ul>
+        </div>
+
+        <div className="md:col-span-2">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-muted">
+            {t('footer.policiesTitle')}
+          </h3>
+          <ul className="mt-3 space-y-2 text-sm text-ink-secondary">
+            {FOOTER_POLICY_LINKS.map((item) => (
+              <li key={item.slug}>
+                <Link href={item.href} className="hover:text-signal">
+                  {t(item.i18nKey)}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       </div>

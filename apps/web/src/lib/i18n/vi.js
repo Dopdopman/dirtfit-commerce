@@ -60,13 +60,27 @@ export const VI_DICT = Object.freeze({
       'Chuyên xe máy địa hình Motocross, Enduro, Dual-Sport, Adventure và phụ tùng hạ yên tối ưu vóc dáng người Việt với công cụ mô phỏng 2D chuẩn milimét.',
     showroomsTitle: 'Hệ thống 3 Showroom Lái Thử',
     quickLinksTitle: 'Điều hướng nhanh',
+    policiesTitle: 'Chính sách & Hướng dẫn',
     links: {
       bikes: 'Danh mục xe & Rider Fit',
       compare: 'So sánh Ghost Overlay',
       accessories: 'Phụ kiện & Hạ yên',
       testRide: 'Đặt lịch lái thử',
     },
+    policies: {
+      ordering: 'Hướng dẫn Đặt hàng & Đặt cọc',
+      terms: 'Điều khoản & Điều kiện',
+      warranty: 'Bảo hành & Đổi trả',
+      riderFit: 'Hỏi đáp Kỹ thuật Rider Fit',
+    },
     bottomNote: 'DirtFit Commerce · Pure JS ESM Architecture · Precision Ergonomics Engine',
+  },
+  policies: {
+    navLabel: 'Tài liệu chính sách DirtFit',
+    tocTitle: 'Mục lục trang này',
+    quickActionsTitle: 'Công cụ tương tác',
+    versionLabel: 'Bản',
+    updatedLabel: 'Cập nhật',
   },
   coldStart: {
     waking: 'Đang khởi động máy chủ dữ liệu (Cold Start), vui lòng đợi trong giây lát...',
