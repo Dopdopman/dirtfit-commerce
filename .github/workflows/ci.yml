@@ -25,7 +25,11 @@ jobs:
       - run: pnpm check:pure-js
       - run: pnpm lint
       - run: pnpm format:check
-      - run: pnpm --filter @dirtfit/api run db:validate
+      - name: Validate Prisma schema
+        env:
+          DATABASE_URL: postgresql://dirtfit:placeholder@localhost:5432/dirtfit_db
+          DIRECT_URL: postgresql://dirtfit:placeholder@localhost:5432/dirtfit_db
+        run: pnpm --filter @dirtfit/api run db:validate
 
   security-audit:
     name: Dependency Audit & Trivy FS Scan
@@ -89,20 +93,30 @@ jobs:
       HOST: 0.0.0.0
       APP_URL: http://localhost:3000
       API_URL: http://localhost:4000
+      LOG_LEVEL: warn
+      SWAGGER_ENABLED: 'true'
       DATABASE_URL: postgresql://dirtfit:dirtfit_ci_password@localhost:5432/dirtfit_db
       DIRECT_URL: postgresql://dirtfit:dirtfit_ci_password@localhost:5432/dirtfit_db
       REDIS_URL: redis://localhost:6379
       JWT_ACCESS_SECRET: ci-test-jwt-access-secret-must-be-at-least-32-bytes-long-012345
+      JWT_ACCESS_TTL: 15m
+      REFRESH_TOKEN_TTL_DAYS: 14
       REFRESH_TOKEN_PEPPER: ci-test-refresh-pepper-must-be-at-least-32-bytes-long-012345
       COOKIE_SECRET: ci-test-cookie-secret-must-be-at-least-32-bytes-long-01234567
+      COOKIE_SAME_SITE: lax
+      COOKIE_SECURE: 'false'
       CRON_HMAC_SECRET: ci-test-cron-hmac-secret-must-be-at-least-32-bytes-long-012345
       CORS_ALLOWED_ORIGINS: http://localhost:3000
+      RATE_LIMIT_GLOBAL_MAX: 120
+      RATE_LIMIT_AUTH_MAX: 10
       PAYMENT_DEFAULT_PROVIDER: MOCK
       ENABLE_MOCK_PAYMENT: 'true'
       MOCK_PAYMENT_WEBHOOK_SECRET: ci-mock-webhook-secret-123456
       PAYOS_CHECKSUM_KEY: ci-payos-checksum-key-123456
+      RESERVATION_TTL_MINUTES: 15
       STORAGE_DRIVER: local
       NEXT_PUBLIC_API_URL: http://localhost:4000
+      INTERNAL_API_URL: http://localhost:4000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -115,7 +129,10 @@ jobs:
       - run: pnpm --filter @dirtfit/api run db:migrate:deploy
       - run: pnpm --filter @dirtfit/api run db:seed
       - run: pnpm test
-      - run: pnpm --filter @dirtfit/web build
+      - name: Build Next.js storefront & admin portal
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @dirtfit/web build
 
   docker-build:
     name: Production Docker Build Verification
