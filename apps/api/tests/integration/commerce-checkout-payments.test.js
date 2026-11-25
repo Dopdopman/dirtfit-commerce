@@ -816,6 +816,8 @@ describe('Phase 5/12 Cart, Idempotent Orders, SELECT FOR UPDATE Race Condition, 
       envOverrides: {
         NODE_ENV: 'production',
         SWAGGER_ENABLED: false,
+        ENABLE_MOCK_OAUTH: 'false',
+        GOOGLE_OAUTH_ENABLED: 'false',
         ENABLE_MOCK_PAYMENT: false,
         PAYMENT_DEFAULT_PROVIDER: 'PAYOS',
         PAYOS_CHECKSUM_KEY: payosChecksumKey,
