@@ -4,13 +4,13 @@
 > **Core Engineering Constraint:** **100% Pure JavaScript (ES Modules / ESM)** — zero TypeScript (`.ts`, `.tsx`, `tsconfig.json`). Uses **JSDoc** for type hints and **Zod (`.strict()`)** for runtime validation + OpenAPI 3.0 generation.  
 > **Storefront Localization:** Full bilingual **EN / VI** (English default via `dirtfit_locale` cookie, SSR + Client hydration-safe).  
 > **Target Infrastructure Budget:** **\$0/month** (Free Tier Production Architecture).  
-> **Current Status:** **v2.1.0 Live in Production** (Phases 0–13C verified on Neon + Upstash + R2 + Render + Vercel, GitHub Actions CI/CD 100% green, 7/7 Playwright E2E specs passed) — **Maintenance & Refinement Plan v2.1.1 Drafted for Review**.
+> **Current Status:** **v2.1.1 Live in Production** (Neon + Upstash + R2 + Render + Vercel, `RENDER_GIT_COMMIT` sync, client magic-bytes sniffer, adaptive bilingual Chatbot, 7/7 Playwright E2E specs passed) — **Plan v2.1.2 (Chatbot Clickable Bike Links & Interactive Product Cards) Drafted for Review**.
 
 ---
 
 ## Architecture Specification Index
 
-All implementation phases strictly follow the 14 specification documents below (`01`–`07` for `v1.0.0` core; `08`–`11` for `v2.0` expansion; `12`–`13` for `v2.1` Real Product Media & Rich Cart UX; `14` for `v2.1.1` Maintenance & Refinements):
+All implementation phases strictly follow the 15 specification documents below (`01`–`07` for `v1.0.0` core; `08`–`11` for `v2.0` expansion; `12`–`13` for `v2.1` Real Product Media & Rich Cart UX; `14` for `v2.1.1` Maintenance & Refinements; `15` for `v2.1.2` Chatbot Clickable Product Links & Cards):
 
 ### Core Platform Specifications (`v1.0.0` — Phases 0 → 8)
 
@@ -40,11 +40,12 @@ All implementation phases strictly follow the 14 specification documents below (
 | **12** | [12-real-product-media-and-rich-cart.md](./12-real-product-media-and-rich-cart.md) | **Hệ thống Ảnh thật Xe máy & Phụ kiện + Rich Cart UX (`v2.1`):** Tách bạch hoàn toàn Ảnh thật bán hàng (`HERO`/`GALLERY` với Partial Unique Index `uq_bike_single_primary_photo`) khỏi `SIDE_PROFILE_BLUEPRINT`, Fallback Hierarchy thống nhất trong `@dirtfit/shared`, upload ảnh Phụ kiện (`Accessory.imageStorageKey`) qua Cloudflare R2 (`Presign -> PUT -> 4KB Magic Bytes`), non-prod local media preview (`/api/v1/media/local/*`), làm giàu Cart/Order/Chatbot kèm Deep-Link (`/bikes/[slug]`, `/accessories?sku=...`), Admin Media Portal UX và ma trận test 3 tầng. |
 | **13** | [13-v21-media-cart-roadmap.md](./13-v21-media-cart-roadmap.md) | Lộ trình triển khai **Phase 13A → Phase 13C**, đồ thị phụ thuộc, **Definition of Done (DoD)** tự động từng sub-phase, quy trình Zero-Downtime Migration trên Neon production, và Risk Register `v2.1`. |
 
-### Maintenance & Refinements (`v2.1.1`)
+### Maintenance & Refinements (`v2.1.1` → `v2.1.2`)
 
 | # | Document | Scope & Core Contents |
 | :-: | :--- | :--- |
 | **14** | [14-v211-ux-cd-chatbot-refinements.md](./14-v211-ux-cd-chatbot-refinements.md) | **Kế hoạch Tinh chỉnh Vận hành & UX `v2.1.1`:** Client-side Image Magic Bytes Sniffer (`apps/web/src/lib/media-helpers.js` + 3 Admin uploaders, tự chuẩn hóa ảnh `.png`/`.jpg` chứa WebP và chặn sớm AVIF/GIF/SVG mà vẫn giữ nguyên lớp 4KB Magic Bytes Backend), đồng bộ `RENDER_GIT_COMMIT` trên `GET /health/ready` và vòng chờ trong `cd.yml`, cùng nâng cấp Chatbot (`resolveEffectiveLocale`, intent `GREETING` fast-path & `GENERAL_PURCHASE` qua migration enum zero-downtime, structured `logger.warn` an toàn khi Gemini fallback). |
+| **15** | [15-v212-chatbot-clickable-bike-links.md](./15-v212-chatbot-clickable-bike-links.md) | **Kế hoạch Nâng cấp Chatbot Clickable Links & Interactive Bike Cards `v2.1.2` (0 DB Migration):** Inline clickable Markdown links (`[Bike Name](/bikes/<slug>)`, `[Accessory](/accessories?sku=...)`) có hậu kiểm `linkifyGroundedProducts()` chống hallucinated slug/404 và safe whitelist parser + strict RegExp XSS/Open-Redirect allowlist bên Frontend; mở rộng `recommendedBikes[]` (`cardMode: 'FIT' \| 'CATALOG'`) kèm `CompactBikeCard.jsx` tái sử dụng `ProductThumbnail`; và lọc citation chính sách theo `hasExplicitPolicySignal()` để loại bỏ hoàn toàn nhiễu `[privacy-data]` (cùng sửa ID section `ergonomics-disclaimer`). |
 
 ---
 
@@ -63,3 +64,4 @@ All implementation phases strictly follow the 14 specification documents below (
 11. **Dual-Domain Motorcycle Media & Accessory R2 Lifecycle (`v2.1`):** Isolates commercial photos (`HERO`/`GALLERY`, protected by `uq_bike_single_primary_photo` with pre-index deduplication CTE) from 2D `SIDE_PROFILE_BLUEPRINT` calibration, adds `Accessory.imageStorageKey` for best-effort R2 cleanup, centralizes `resolveBikeMedia()` in `@dirtfit/shared`, and pairs `onError` wireframe/SKU fallback so zero broken images ever appear.
 12. **Rich Cart, Checkout & Order Deep-Link Parity (`v2.1`):** Enriches `cart.items[].product` and `order.items[]` with deterministic `imageUrl`, `imageKind`, and `productUrl` (`/bikes/[slug]` and `/accessories?sku=...`), supported by an SSR-safe `?sku` highlight filter on `/accessories` and non-prod local media serving (`/api/v1/media/local/*`, strictly `404` in production) for end-to-end Playwright image verification.
 13. **Production Media Sniffer, CD Commit Sync & Adaptive Bilingual Chatbot (`v2.1.1`):** Sniffs 16-byte raster headers client-side (`inspectImageFileForUpload`) to auto-align CDN `.png`/`.jpg`-named WebP files without loosening backend 4KB Magic Bytes enforcement; exposes non-sensitive `commit` (`RENDER_GIT_COMMIT`) on `/health/ready` so `cd.yml` waits until Render actually serves `GITHUB_SHA` before running smoke checks; and upgrades Chatbot UX with message-level locale detection (`resolveEffectiveLocale`), zero-downtime `GREETING` / `GENERAL_PURCHASE` intents, and secret-free fallback observability.
+14. **Grounded Clickable Product Links, Zero-Migration Interactive Bike Cards & Precision Citations (`v2.1.2`):** Validates and auto-links grounded `/bikes/[slug]` and `/accessories?sku=...` Markdown links server-side (`linkifyGroundedProducts()`) before DB persistence to block hallucinated slugs and external redirects; renders links safely in React via strict anchored internal-URL allowlist (`next/link`, zero `dangerouslySetInnerHTML`); reuses JSONB `ChatMessage.recommendedBikesJson` with `cardMode: 'FIT' | 'CATALOG'` to display `CompactBikeCard` (`ProductThumbnail`) on purchase/catalog queries without any DB migration; and gates BM25 policy retrieval behind `hasExplicitPolicySignal()` to eliminate irrelevant `[privacy-data]` citations.

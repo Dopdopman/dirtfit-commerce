@@ -321,3 +321,19 @@ Chi tiết tại [14-v211-ux-cd-chatbot-refinements.md](./14-v211-ux-cd-chatbot-
   - **`GENERAL_PURCHASE`** (`"tôi muốn mua"`, `"cần tư vấn"`, `"buy a bike"`, `"recommend a bike"`): nạp ngữ cảnh danh mục xe live + khoảng giá và chủ động hỏi chiều cao, cân nặng, địa hình để tính bằng `@dirtfit/ergonomics-engine` ở lượt kế tiếp.
   - Bảo toàn 100% lớp chặn `detectPromptInjection` và `OUT_OF_SCOPE` cho câu hỏi ngoài phạm vi.
 - **Structured Fallback Logging (`gemini.adapter.js` & `chat-adapter.factory.js`):** Ghi `logger.warn` có cấu trúc (`event: 'chatbot_gemini_fallback'`, `statusCode`, `errorCode`, `model`, `latencyMs`, `attempts`, `errorSummary` đã làm sạch secret) mỗi khi Gemini lỗi/429/timeout và cảnh báo 1 lần mỗi process khi `CHAT_PROVIDER=auto` thiếu `GEMINI_API_KEY`, tuyệt đối không log API key hay PII.
+
+---
+
+## 10. v2.1.2 Clickable Bike/Accessory Links, Interactive Product Cards & Precision Citations Delta
+
+Chi tiết đầy đủ tại [15-v212-chatbot-clickable-bike-links.md](./15-v212-chatbot-clickable-bike-links.md) (**0 Prisma migration**, tái sử dụng `ChatMessage.recommendedBikesJson`):
+
+- **Inline Clickable Markdown Links + Server-Side Link Grounder (`link-grounder.js`):**
+  - Cả `GroundedFallbackAdapter` lẫn prompt Gemini (`system.prompt.md`) gắn link nội bộ chuẩn `[Bike Name](/bikes/<slug>)` và `[Accessory](/accessories?sku=<sku>)` cho sản phẩm có thật.
+  - Hàm thuần `linkifyGroundedProducts()` chạy ở `chatbot.service.js` trước khi lưu DB: xác thực mọi `slug`/`sku` khớp catalog thật (chống 404/hallucination), tước URL ngoài/độc hại, và tự bọc lần xuất hiện đầu tiên nếu LLM quên gắn link (không lồng link hay phá code span).
+  - Frontend nâng cấp `apps/web/src/lib/chat-markdown.js` (`isSafeInternalUrl` RegExp allowlist chặt + parser hỗ trợ `**[label](href)**`, `[**label**](href)`, `[label](href)` không dùng `dangerouslySetInnerHTML`) và `SafeChatMessage.jsx` render qua `next/link` với màu `#E84C1E`.
+- **Interactive Product Cards cho Mọi Intent có Sản phẩm (`cardMode: 'FIT' | 'CATALOG'`):**
+  - Mở rộng `recommendedBikes[]` cho `GENERAL_PURCHASE` và `CATALOG_PRICING` (`cardMode: 'CATALOG'`, tối đa 4 xe kèm `coverImageUrl`, `priceVnd`, `unladenSeatHeightMm`, `availableQty`, `productUrl`), giữ nguyên `MiniFitCard` cho `cardMode: 'FIT'` (`RIDER_FIT_ADVICE`).
+  - Bổ sung `CompactBikeCard.jsx` tái sử dụng `ProductThumbnail` (`size="sm"`, tự fallback CAD wireframe nếu chưa có ảnh thật), bấm toàn thẻ nhảy thẳng sang `/bikes/[slug]`; ẩn các citation chip `bike:*` đã hiển thị dưới dạng card để tránh rối mắt.
+- **Lọc Citation Chính sách Không Liên quan:**
+  - Bổ sung `hasExplicitPolicySignal()` trong `intent-router.js` để `GENERAL_PURCHASE` / `CATALOG_PRICING` thuần không gọi BM25 toàn kho chính sách (loại bỏ triệt để nhiễu `[privacy-data]` trên `"tôi muốn mua xe"`), đồng thời sửa ID section `ergo-disclaimer` → `ergonomics-disclaimer` trong `context-builder.js` để `RIDER_FIT_ADVICE` trích dẫn đúng mục miễn trừ kỹ thuật.
