@@ -337,3 +337,18 @@ Chi tiết đầy đủ tại [15-v212-chatbot-clickable-bike-links.md](./15-v21
   - Bổ sung `CompactBikeCard.jsx` tái sử dụng `ProductThumbnail` (`size="sm"`, tự fallback CAD wireframe nếu chưa có ảnh thật), bấm toàn thẻ nhảy thẳng sang `/bikes/[slug]`; ẩn các citation chip `bike:*` đã hiển thị dưới dạng card để tránh rối mắt.
 - **Lọc Citation Chính sách Không Liên quan:**
   - Bổ sung `hasExplicitPolicySignal()` trong `intent-router.js` để `GENERAL_PURCHASE` / `CATALOG_PRICING` thuần không gọi BM25 toàn kho chính sách (loại bỏ triệt để nhiễu `[privacy-data]` trên `"tôi muốn mua xe"`), đồng thời sửa ID section `ergo-disclaimer` → `ergonomics-disclaimer` trong `context-builder.js` để `RIDER_FIT_ADVICE` trích dẫn đúng mục miễn trừ kỹ thuật.
+
+---
+
+## 11. v2.1.3 NLU Entity Filtering, Session State Hygiene & Human-Readable Copy Delta
+
+Chi tiết đầy đủ tại [16-v213-chatbot-nlu-filtering-and-human-copy.md](./16-v213-chatbot-nlu-filtering-and-human-copy.md) (**0 Prisma migration**, **0 dependency mới**):
+
+- **Nhận diện Thực thể Động & Tách bạch Intent (`intent-router.js`):**
+  - Bổ sung `extractCatalogEntities()` nhận diện động hãng xe có trong catalog (`requestedBrands`), hãng ngoài catalog (`unstockedBrands`), phụ kiện (`matchedAccessorySkus`, `requestedAccessoryBrands`) và trọng tâm thông số (`specFocus`: `SEAT_HEIGHT`, `WEIGHT`, `PRICE`, `STOCK`, `SPECS`, `ACCESSORY`, `GENERAL`); sửa lỗi trùng token số thuần (`350`) giữa `KTM 350 EXC-F` và `Husqvarna FE 350`.
+  - Tách dứt điểm câu hỏi thông số `"chiều cao yên"` (`CATALOG_PRICING`) khỏi tư vấn vóc dáng (`RIDER_FIT_ADVICE`), đồng thời đặt chốt `CLEAR_OFF_TOPIC_REGEX` chặn các câu lạc đề gài tên hãng (VD: `"viết code python về ktm"`).
+- **Entity-Scoped Filtering & Kiểm soát `sessionRiderProfile` (`context-builder.js`, `fallback.adapter.js`):**
+  - Nạp bộ phụ kiện live qua `CATALOG_KEYS.PUBLIC_ACCESSORIES` (`CatalogCache`), lọc cứng kết quả & thẻ xe (`CompactBikeCard` và `MiniFitCard`) theo đúng hãng/mẫu khách yêu cầu, và trả lời trung thực không chèn hãng khác khi khách hỏi hãng chưa kinh doanh (`Ducati`, `BMW`, ...).
+  - Kế thừa `sessionRiderProfile` từ lịch sử hội thoại **chỉ** khi lượt hiện tại thuộc `RIDER_FIT_ADVICE` — không tự chạy lại vóc dáng lượt trước khi khách chuyển sang hỏi chiều cao yên hay tồn kho theo hãng.
+- **Loại bỏ 100% Raw Enum & Tên Package Nội bộ (`human-labels.js`, `system.prompt.md`, `chatbot.service.js`):**
+  - Chuẩn hóa toàn bộ nhãn EN/VI tự nhiên cho `BikeCategory`, `ContactStatus`, `FootwearType`, `OrderType`, `OrderStatus`, `ShowroomCode` và thay `@dirtfit/ergonomics-engine` bằng tên thân thiện; bổ sung lớp hậu kiểm `humanizeAssistantCopy()` bảo toàn URL nhằm chặn 100% rò rỉ `UPPER_SNAKE_CASE` và `@dirtfit/*` ngay cả khi Gemini sinh text tự do.
