@@ -310,13 +310,13 @@ const FORBIDDEN_RAW_TOKENS = [
 
 ### 7.3. Definition of Done (DoD) trước khi Release `v2.1.3`
 
-- [ ] **0 Prisma migration mới** (`git diff apps/api/prisma/` rỗng, `pnpm --filter @dirtfit/api run db:validate` thoát mã `0`).
-- [ ] **0 dependency mới** (`git diff package.json apps/*/package.json packages/*/package.json` rỗng).
-- [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
-- [ ] `pnpm test:unit` pass 100% trên cả 5 packages (`< 5s`), bao gồm toàn bộ test mới về brand/spec NLU & `humanizeAssistantCopy()`.
-- [ ] `$env:ENABLE_MOCK_OAUTH='true'; $env:GOOGLE_OAUTH_ENABLED='true'; pnpm test:integration` pass 100% (2 lần liên tiếp), khẳng định 0 token trong `FORBIDDEN_RAW_TOKENS`.
-- [ ] `pnpm --filter @dirtfit/web build && pnpm --filter @dirtfit/api run db:seed && pnpm test:system` pass **7/7** Playwright specs.
-- [ ] `docker compose -f docker-compose.prod.yml up -d --build --wait` + `node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 --expect-prod` trả `"status": "PASSED"`.
+- [x] **0 Prisma migration mới** (`git diff apps/api/prisma/` rỗng, `pnpm --filter @dirtfit/api run db:validate` thoát mã `0`).
+- [x] **0 dependency mới** (`git diff package.json apps/*/package.json packages/*/package.json` rỗng).
+- [x] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
+- [x] `pnpm test:unit` pass 100% trên cả 5 packages (`< 5s`), bao gồm toàn bộ test mới về brand/spec NLU & `humanizeAssistantCopy()`.
+- [x] `$env:ENABLE_MOCK_OAUTH='true'; $env:GOOGLE_OAUTH_ENABLED='true'; pnpm test:integration` pass 100% (2 lần liên tiếp), khẳng định 0 token trong `FORBIDDEN_RAW_TOKENS`.
+- [x] `pnpm --filter @dirtfit/web build && pnpm --filter @dirtfit/api run db:seed && pnpm test:system` pass **7/7** Playwright specs.
+- [x] `docker compose -f docker-compose.prod.yml up -d --build --wait` + `node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 --expect-prod` trả `"status": "PASSED"`.
 
 ---
 

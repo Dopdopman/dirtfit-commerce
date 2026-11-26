@@ -157,6 +157,26 @@ const EnvSchema = z
   });
 
 /**
+ * Trim whitespace and strip a single pair of accidental outer quotes from API key env values.
+ * @param {unknown} val
+ * @returns {string|undefined}
+ */
+export function normalizeOptionalApiKey(val) {
+  if (typeof val !== 'string') {
+    return undefined;
+  }
+  let cleaned = val.trim();
+  if (
+    cleaned.length >= 2 &&
+    ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+      (cleaned.startsWith("'") && cleaned.endsWith("'")))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/**
  * Load and validate runtime environment configuration using Zod (fail-fast).
  * @param {object} [overrides]
  * @returns {object}
@@ -214,8 +234,8 @@ export function loadEnv(overrides = {}) {
     GOOGLE_CALLBACK_URL: rawSource.GOOGLE_CALLBACK_URL || undefined,
     OAUTH_STATE_SECRET: rawSource.OAUTH_STATE_SECRET || undefined,
     CHAT_PROVIDER: rawSource.CHAT_PROVIDER,
-    GEMINI_API_KEY: rawSource.GEMINI_API_KEY || undefined,
-    GEMINI_MODEL: rawSource.GEMINI_MODEL,
+    GEMINI_API_KEY: normalizeOptionalApiKey(rawSource.GEMINI_API_KEY),
+    GEMINI_MODEL: normalizeOptionalString(rawSource.GEMINI_MODEL),
     CHAT_TIMEOUT_MS: rawSource.CHAT_TIMEOUT_MS,
     CHAT_RATE_LIMIT_MAX: rawSource.CHAT_RATE_LIMIT_MAX,
     CHAT_GUEST_SESSION_TTL_DAYS: rawSource.CHAT_GUEST_SESSION_TTL_DAYS,

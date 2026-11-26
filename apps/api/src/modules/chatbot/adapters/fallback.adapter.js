@@ -1,4 +1,13 @@
 import { CHAT_INTENTS, SHOWROOMS } from '@dirtfit/shared';
+import {
+  formatAccessoryCategoryLabel,
+  formatCategoryLabel,
+  formatContactLabel,
+  formatFootwearLabel,
+  formatOrderStatusLabel,
+  formatOrderTypeLabel,
+  getSimulatorBrandName,
+} from '../human-labels.js';
 
 function formatMoney(amount, locale) {
   const num = Number(amount ?? 0);
@@ -16,22 +25,44 @@ function formatAccessoryLink(name, sku) {
   return `[${name}](/accessories?sku=${encodeURIComponent(sku)})`;
 }
 
-function getContactLabel(status, locale) {
-  const viMap = {
-    FLAT_FOOT: 'Chống cả hai bàn chân vững (FLAT_FOOT)',
-    BALLS_OF_FEET: 'Chống phần ức bàn chân vững (BALLS_OF_FEET)',
-    TIP_TOE: 'Chống mũi chân (TIP_TOE)',
-    ONE_FOOT_SHIFT: 'Chống 1 chân nghiêng xe (ONE_FOOT_SHIFT)',
-    TOO_TALL_UNSAFE: 'Yên quá cao (TOO_TALL_UNSAFE)',
-  };
-  const enMap = {
-    FLAT_FOOT: 'Flat Foot (FLAT_FOOT)',
-    BALLS_OF_FEET: 'Balls of Feet (BALLS_OF_FEET)',
-    TIP_TOE: 'Tip-Toe (TIP_TOE)',
-    ONE_FOOT_SHIFT: 'One-Foot Shift (ONE_FOOT_SHIFT)',
-    TOO_TALL_UNSAFE: 'Too Tall Stock (TOO_TALL_UNSAFE)',
-  };
-  return (locale === 'vi' ? viMap[status] : enMap[status]) ?? status;
+function resolveRequestedBrandDisplay(groundedContext) {
+  const requested = groundedContext.catalogEntities?.requestedBrands ?? [];
+  if (requested.length === 0) {
+    return null;
+  }
+  const matched = groundedContext.matchedCatalogBikes ?? [];
+  const names = [];
+  for (const slug of requested) {
+    const bike = matched.find(
+      (b) => (b.brand?.slug ?? '').toLowerCase() === String(slug).toLowerCase()
+    );
+    names.push(bike?.brand?.name ?? slug.toUpperCase());
+  }
+  return Array.from(new Set(names)).join(', ');
+}
+
+function formatUnstockedBrandResponse(groundedContext) {
+  const { locale, catalogEntities, stockedBrandNames } = groundedContext;
+  const isVi = locale === 'vi';
+  const askedBrands = (catalogEntities?.unstockedBrands ?? []).join(', ') || 'requested';
+  const stocked =
+    stockedBrandNames?.length > 0
+      ? stockedBrandNames.join(', ')
+      : 'Honda, Yamaha, Kawasaki, KTM, Husqvarna';
+
+  if (isVi) {
+    return (
+      `Hiện tại **DirtFit Commerce** chưa kinh doanh dòng xe **${askedBrands}**. ` +
+      `Danh mục xe đang sẵn kho của shop gồm các hãng: **${stocked}**.\n\n` +
+      `Bạn có thể xem toàn bộ xe đang bán tại trang [Xe địa hình](/bikes) hoặc nhắn tên một trong các hãng trên để tôi kiểm tra giá bán, thông số yên và tồn kho nhé!`
+    );
+  }
+
+  return (
+    `**DirtFit Commerce** does not currently carry **${askedBrands}** motorcycles. ` +
+    `Our live catalog stocks: **${stocked}**.\n\n` +
+    `You can browse all available models on our [Motorcycles](/bikes) page or ask about any of the stocked brands above.`
+  );
 }
 
 function formatPolicyResponse(groundedContext) {
@@ -39,9 +70,7 @@ function formatPolicyResponse(groundedContext) {
   const isVi = locale === 'vi';
 
   if (intent === CHAT_INTENTS.SHOWROOM_TEST_RIDE) {
-    const showroomBullets = SHOWROOMS.map((s) => `- **${s.code}** — ${s.name}: ${s.address}`).join(
-      '\n'
-    );
+    const showroomBullets = SHOWROOMS.map((s) => `- **${s.name}:** ${s.address}`).join('\n');
 
     if (isVi) {
       const topNote = retrievedChunks[0]
@@ -83,17 +112,23 @@ function formatPolicyResponse(groundedContext) {
 }
 
 function formatRiderFitResponse(groundedContext) {
-  const { locale, recommendedBikes, effectiveRiderProfile } = groundedContext;
+  const { locale, recommendedBikes, effectiveRiderProfile, catalogScopeStatus } = groundedContext;
   const isVi = locale === 'vi';
+
+  if (catalogScopeStatus === 'UNSTOCKED_BRAND') {
+    return formatUnstockedBrandResponse(groundedContext);
+  }
 
   if (recommendedBikes.length === 0) {
     return isVi
-      ? 'Hiện chưa có mẫu xe đang mở bán để tính toán thông số Rider Fit. Vui lòng quay lại trang Xe địa hình hoặc liên hệ showroom.'
-      : 'No active motorcycles are currently available for Rider Fit evaluation. Please check our Bikes catalog or contact a showroom.';
+      ? 'Hiện chưa có mẫu xe phù hợp đang mở bán để tính toán thông số Rider Fit. Vui lòng xem danh mục tại trang [Xe địa hình](/bikes) hoặc liên hệ showroom.'
+      : 'No matching active motorcycles are currently available for Rider Fit evaluation. Please check our [Motorcycles](/bikes) catalog or contact a showroom.';
   }
 
   const h = Math.round(effectiveRiderProfile.heightCm);
   const w = Math.round(effectiveRiderProfile.weightKg);
+  const footwearLabel = formatFootwearLabel(effectiveRiderProfile.footwear, locale);
+  const simBrand = getSimulatorBrandName(locale);
 
   const lines = recommendedBikes.map((bike, index) => {
     const accSnippet =
@@ -107,48 +142,174 @@ function formatRiderFitResponse(groundedContext) {
           : ` Lowering option: **-${bike.recommendedLoweringMm} mm** (${bike.loweringTip})${accSnippet}.`
         : '';
     const bikeLink = `**${formatBikeLink(bike)}**`;
+    const categoryLabel = formatCategoryLabel(bike.category, locale);
+    const contactLabel = formatContactLabel(bike.contactStatus, locale);
 
     if (isVi) {
-      return `${index + 1}. ${bikeLink} (${bike.category}) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** (Còn ${bike.availableQty} xe)\n   - Yên nguyên bản: \`${bike.unladenSeatHeightMm} mm\` → Yên thực tế sau Rider Sag (\`${bike.riderSagMm} mm\`): **${bike.effectiveSeatHeightMm} mm**\n   - Chống chân: **${getContactLabel(bike.contactStatus, 'vi')}** · Fit Score: **${bike.fitScore}/100**.${loweringNote}`;
+      return `${index + 1}. ${bikeLink} (${categoryLabel}) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** (Còn ${bike.availableQty} xe)\n   - Yên nguyên bản: \`${bike.unladenSeatHeightMm} mm\` → Yên thực tế sau Rider Sag (\`${bike.riderSagMm} mm\`): **${bike.effectiveSeatHeightMm} mm**\n   - Chống chân: **${contactLabel}** · Fit Score: **${bike.fitScore}/100**.${loweringNote}`;
     }
 
-    return `${index + 1}. ${bikeLink} (${bike.category}) — Price: **${formatMoney(bike.priceVnd, 'en')}** (${bike.availableQty} in stock)\n   - Unladen seat: \`${bike.unladenSeatHeightMm} mm\` → Effective seat after Rider Sag (\`${bike.riderSagMm} mm\`): **${bike.effectiveSeatHeightMm} mm**\n   - Foot contact: **${getContactLabel(bike.contactStatus, 'en')}** · Fit Score: **${bike.fitScore}/100**.${loweringNote}`;
+    return `${index + 1}. ${bikeLink} (${categoryLabel}) — Price: **${formatMoney(bike.priceVnd, 'en')}** (${bike.availableQty} in stock)\n   - Unladen seat: \`${bike.unladenSeatHeightMm} mm\` → Effective seat after Rider Sag (\`${bike.riderSagMm} mm\`): **${bike.effectiveSeatHeightMm} mm**\n   - Foot contact: **${contactLabel}** · Fit Score: **${bike.fitScore}/100**.${loweringNote}`;
   });
 
   if (isVi) {
     return (
-      `Kết quả mô phỏng kỹ thuật từ **@dirtfit/ergonomics-engine** cho vóc dáng **${h} cm / ${w} kg** (${effectiveRiderProfile.footwear}):\n\n` +
+      `Kết quả mô phỏng từ **${simBrand}** cho vóc dáng **${h} cm / ${w} kg** (${footwearLabel}):\n\n` +
       `${lines.join('\n\n')}\n\n` +
       `*Lưu ý kỹ thuật:* Các số đo trên mang tính tham khảo dựa trên cấu hình tiêu chuẩn; bạn nên bấm **Mở Mô phỏng 2D** hoặc đặt lịch ngồi thử thực tế tại showroom. [ergonomics-disclaimer]`
     );
   }
 
   return (
-    `Real technical evaluation from **@dirtfit/ergonomics-engine** for **${h} cm / ${w} kg** (${effectiveRiderProfile.footwear}):\n\n` +
+    `Evaluation from **${simBrand}** for **${h} cm / ${w} kg** (${footwearLabel}):\n\n` +
     `${lines.join('\n\n')}\n\n` +
     `*Technical disclaimer:* Calculations reflect standard factory calibration; open the **2D Simulator** card below or test-fit in person at our showrooms. [ergonomics-disclaimer]`
   );
 }
 
-function formatCatalogResponse(groundedContext) {
-  const { locale, matchedCatalogBikes, liveBikes } = groundedContext;
+function formatAccessoriesOnlyResponse(groundedContext) {
+  const { locale, matchedAccessories } = groundedContext;
   const isVi = locale === 'vi';
+
+  if (matchedAccessories.length === 0) {
+    return isVi
+      ? 'Hiện không tìm thấy phụ kiện khớp chính xác trong kho. Bạn có thể xem toàn bộ phụ tùng hạ yên & đồ bảo hộ tại trang [Phụ kiện](/accessories).'
+      : 'No exact matching accessories were found in stock right now. Browse all lowering kits and riding gear on the [Accessories](/accessories) page.';
+  }
+
+  const lines = matchedAccessories.map((acc) => {
+    const link = `**${formatAccessoryLink(acc.name, acc.sku)}**`;
+    const cat = formatAccessoryCategoryLabel(acc.category, locale);
+    return isVi
+      ? `- ${link} (${cat}) — Giá: **${formatMoney(acc.priceVnd, 'vi')}** | Còn **${acc.availableQty}** sản phẩm`
+      : `- ${link} (${cat}) — Price: **${formatMoney(acc.priceVnd, 'en')}** | **${acc.availableQty}** available`;
+  });
+
+  return (
+    (isVi
+      ? '**Phụ kiện & đồ bảo hộ đang có sẵn tại DirtFit Commerce:**'
+      : '**Accessories & riding gear available at DirtFit Commerce:**') +
+    '\n\n' +
+    lines.join('\n')
+  );
+}
+
+function formatCatalogResponse(groundedContext) {
+  const {
+    locale,
+    matchedCatalogBikes,
+    matchedAccessories,
+    liveBikes,
+    catalogScopeStatus,
+    catalogEntities,
+    historyRiderProfile,
+  } = groundedContext;
+  const isVi = locale === 'vi';
+
+  if (catalogScopeStatus === 'UNSTOCKED_BRAND') {
+    return formatUnstockedBrandResponse(groundedContext);
+  }
+
+  if (catalogScopeStatus === 'SCOPED_ACCESSORY') {
+    return formatAccessoriesOnlyResponse(groundedContext);
+  }
+
   const bikes = matchedCatalogBikes.length > 0 ? matchedCatalogBikes : liveBikes.slice(0, 4);
 
   if (bikes.length === 0) {
     return isVi
-      ? 'Hiện danh mục xe đang được cập nhật. Vui lòng xem lại sau ít phút.'
-      : 'Our live motorcycle catalog is currently being updated. Please check back shortly.';
+      ? 'Hiện danh mục xe đang được cập nhật. Vui lòng xem lại tại trang [Xe địa hình](/bikes).'
+      : 'Our live motorcycle catalog is currently being updated. Please check back on [Motorcycles](/bikes).';
+  }
+
+  const specFocus = catalogEntities?.specFocus ?? 'GENERAL';
+  const brandLabel = resolveRequestedBrandDisplay(groundedContext);
+
+  if (specFocus === 'SEAT_HEIGHT') {
+    const lines = bikes.map((bike) => {
+      const seat = bike.geometrySpec?.unladenSeatHeightMm ?? 'N/A';
+      const width = bike.geometrySpec?.seatWidthMm;
+      const widthNote = width
+        ? isVi
+          ? ` (bề ngang yên \`${width} mm\`)`
+          : ` (seat width \`${width} mm\`)`
+        : '';
+      const catLabel = formatCategoryLabel(bike.category, locale);
+      const bikeLink = `**${formatBikeLink(bike)}**`;
+      return isVi
+        ? `- ${bikeLink} (${catLabel}) — Chiều cao yên nguyên bản: **${seat} mm**${widthNote} | Giá: **${formatMoney(bike.priceVnd, 'vi')}** | Còn **${bike.availableQty}** xe`
+        : `- ${bikeLink} (${catLabel}) — Unladen seat height: **${seat} mm**${widthNote} | Price: **${formatMoney(bike.priceVnd, 'en')}** | **${bike.availableQty}** in stock`;
+    });
+
+    const header = isVi
+      ? `Thông số **chiều cao yên nguyên bản** của ${bikes.length === 1 ? 'mẫu xe' : 'các mẫu xe'}${brandLabel ? ` **${brandLabel}**` : ''}:`
+      : `**Unladen seat height specs** for${brandLabel ? ` **${brandLabel}**` : ' matching motorcycles'}:`;
+
+    let followUpHint = '';
+    if (historyRiderProfile?.heightCm) {
+      const h = Math.round(historyRiderProfile.heightCm);
+      const wNote = historyRiderProfile.weightKg
+        ? ` / ${Math.round(historyRiderProfile.weightKg)} kg`
+        : '';
+      const targetSubject = brandLabel || bikes[0].name;
+      followUpHint = isVi
+        ? `\n\nNếu bạn muốn tính chiều cao yên thực tế sau độ lún phuộc theo vóc dáng **${h} cm${wNote}**, hãy nhắn **"Tôi đi vừa ${targetSubject} không?"** nhé!`
+        : `\n\nWant to check effective seat height after suspension sag for **${h} cm${wNote}**? Just ask **"Does ${targetSubject} fit me?"**.`;
+    }
+
+    return `${header}\n\n${lines.join('\n')}${followUpHint}`;
+  }
+
+  if (specFocus === 'WEIGHT') {
+    const lines = bikes.map((bike) => {
+      const wetWeight = bike.geometrySpec?.wetWeightKg ?? 'N/A';
+      const seat = bike.geometrySpec?.unladenSeatHeightMm ?? 'N/A';
+      const catLabel = formatCategoryLabel(bike.category, locale);
+      const bikeLink = `**${formatBikeLink(bike)}**`;
+      return isVi
+        ? `- ${bikeLink} (${catLabel} · ${bike.engineCc}cc) — Trọng lượng ướt: **${wetWeight} kg** | Yên: \`${seat} mm\` | Giá: **${formatMoney(bike.priceVnd, 'vi')}**`
+        : `- ${bikeLink} (${catLabel} · ${bike.engineCc}cc) — Wet weight: **${wetWeight} kg** | Seat: \`${seat} mm\` | Price: **${formatMoney(bike.priceVnd, 'en')}**`;
+    });
+    const header = isVi
+      ? `**Thông số trọng lượng${brandLabel ? ` xe ${brandLabel}` : ''} từ DirtFit Catalog:**`
+      : `**Weight specifications${brandLabel ? ` for ${brandLabel}` : ''} from DirtFit Catalog:**`;
+    return `${header}\n\n${lines.join('\n')}`;
   }
 
   const lines = bikes.map((bike) => {
     const seat = bike.geometrySpec?.unladenSeatHeightMm ?? 'N/A';
+    const catLabel = formatCategoryLabel(bike.category, locale);
     const bikeLink = `**${formatBikeLink(bike)}**`;
     if (isVi) {
-      return `- ${bikeLink} (${bike.category} · ${bike.engineCc}cc) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** | Đặt cọc: **${formatMoney(bike.depositAmountVnd, 'vi')}** | Yên tiêu chuẩn: \`${seat} mm\` | Tồn kho khả dụng: **${bike.availableQty}**`;
+      return `- ${bikeLink} (${catLabel} · ${bike.engineCc}cc) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** | Đặt cọc: **${formatMoney(bike.depositAmountVnd, 'vi')}** | Yên tiêu chuẩn: \`${seat} mm\` | Tồn kho khả dụng: **${bike.availableQty}**`;
     }
-    return `- ${bikeLink} (${bike.category} · ${bike.engineCc}cc) — Price: **${formatMoney(bike.priceVnd, 'en')}** | Deposit: **${formatMoney(bike.depositAmountVnd, 'en')}** | Unladen seat: \`${seat} mm\` | Available: **${bike.availableQty}**`;
+    return `- ${bikeLink} (${catLabel} · ${bike.engineCc}cc) — Price: **${formatMoney(bike.priceVnd, 'en')}** | Deposit: **${formatMoney(bike.depositAmountVnd, 'en')}** | Unladen seat: \`${seat} mm\` | Available: **${bike.availableQty}**`;
   });
+
+  let header;
+  if (catalogScopeStatus === 'SCOPED_BRAND' && brandLabel) {
+    header = isVi
+      ? `Có! Hiện **DirtFit Commerce** đang có sẵn ${bikes.length === 1 ? 'mẫu xe' : 'các mẫu xe'} **${brandLabel}** sau:`
+      : `Yes! **DirtFit Commerce** currently has the following **${brandLabel}** motorcycle(s) available:`;
+  } else {
+    header = isVi
+      ? '**Thông tin giá bán & tồn kho trực tiếp từ DirtFit Catalog:**'
+      : '**Live pricing & availability from DirtFit Catalog:**';
+  }
+
+  const accSuffix =
+    matchedAccessories.length > 0
+      ? (isVi
+          ? '\n\n**Phụ kiện tương thích sẵn kho:**\n'
+          : '\n\n**Compatible accessories in stock:**\n') +
+        matchedAccessories
+          .slice(0, 3)
+          .map(
+            (acc) =>
+              `- **${formatAccessoryLink(acc.name, acc.sku)}** — **${formatMoney(acc.priceVnd, locale)}**`
+          )
+          .join('\n')
+      : '';
 
   const compareSuffix =
     matchedCatalogBikes.length >= 2
@@ -157,14 +318,7 @@ function formatCatalogResponse(groundedContext) {
         : `\n\nCompare geometry side-by-side in [Compare in 2D Ghost Overlay](/compare?bikeA=${encodeURIComponent(bikes[0].slug)}&bikeB=${encodeURIComponent(bikes[1].slug)}).`
       : '';
 
-  return (
-    (isVi
-      ? '**Thông tin giá bán & tồn kho trực tiếp từ DirtFit Catalog:**'
-      : '**Live pricing & availability from DirtFit Catalog:**') +
-    '\n\n' +
-    lines.join('\n') +
-    compareSuffix
-  );
+  return `${header}\n\n${lines.join('\n')}${accSuffix}${compareSuffix}`;
 }
 
 function formatOrderStatusHelp(groundedContext) {
@@ -183,11 +337,13 @@ function formatOrderStatusHelp(groundedContext) {
       : 'Your account does not have any orders yet. You can browse motorcycles, check your 2D Rider Fit, and place a 15-minute deposit hold anytime.';
   }
 
-  const lines = scopedOrders.map((o) =>
-    isVi
-      ? `- Đơn **${o.orderNumber}** (${o.orderType}) — Trạng thái: **${o.status}** · Tổng: **${formatMoney(o.totalVnd, 'vi')}** · Thanh toán ngay: **${formatMoney(o.payableNowVnd, 'vi')}**`
-      : `- Order **${o.orderNumber}** (${o.orderType}) — Status: **${o.status}** · Total: **${formatMoney(o.totalVnd, 'en')}** · Payable now: **${formatMoney(o.payableNowVnd, 'en')}**`
-  );
+  const lines = scopedOrders.map((o) => {
+    const typeLabel = formatOrderTypeLabel(o.orderType, locale);
+    const statusLabel = formatOrderStatusLabel(o.status, locale);
+    return isVi
+      ? `- Đơn **${o.orderNumber}** (${typeLabel}) — Trạng thái: **${statusLabel}** · Tổng: **${formatMoney(o.totalVnd, 'vi')}** · Thanh toán ngay: **${formatMoney(o.payableNowVnd, 'vi')}**`
+      : `- Order **${o.orderNumber}** (${typeLabel}) — Status: **${statusLabel}** · Total: **${formatMoney(o.totalVnd, 'en')}** · Payable now: **${formatMoney(o.payableNowVnd, 'en')}**`;
+  });
 
   return (
     (isVi ? '**Các đơn hàng gần nhất của bạn:**' : '**Your most recent DirtFit orders:**') +
@@ -203,8 +359,8 @@ function formatGreetingResponse(locale) {
   if (locale === 'vi') {
     return (
       'Chào bạn! Tôi là **Trợ lý Kỹ thuật DirtFit Commerce**. Tôi có thể hỗ trợ bạn ngay:\n\n' +
-      '- **Tư vấn chọn xe theo vóc dáng (Rider Fit 2D):** Nhập chiều cao & cân nặng (ví dụ: *"Cao 1m68 nặng 65kg đi xe nào?"*) để Engine tính độ lún phuộc và mức chống chân thực tế.\n' +
-      '- **Báo giá, tồn kho & phụ kiện hạ yên:** Hỏi trực tiếp tên xe (KTM, Honda CRF, Yamaha WR/Ténéré, Kawasaki KLX, Suzuki DR-Z) hoặc nhu cầu mua xe.\n' +
+      '- **Tư vấn chọn xe theo vóc dáng (Rider Fit 2D):** Nhập chiều cao & cân nặng (ví dụ: *"Cao 1m68 nặng 65kg đi xe nào?"*) để hệ thống mô phỏng độ lún phuộc và mức chống chân thực tế.\n' +
+      '- **Báo giá, tồn kho & phụ kiện hạ yên:** Hỏi trực tiếp hãng xe hoặc mẫu xe (KTM, Honda CRF, Yamaha WR/Ténéré, Kawasaki KLX, Husqvarna FE) hay nhu cầu mua xe.\n' +
       '- **Đặt cọc PayOS VietQR, luật COD, bảo hành & lịch lái thử:** Tại 3 showroom Hà Nội, Đà Nẵng và TP.HCM.'
     );
   }
@@ -212,7 +368,7 @@ function formatGreetingResponse(locale) {
   return (
     'Hello! I am the **DirtFit Commerce** Technical Assistant. I can help you right away with:\n\n' +
     '- **2D Rider Fit Sizing:** Share your height & weight (e.g., *"I\'m 168cm 65kg, which bike fits me?"*) for real suspension sag and foot-reach scoring.\n' +
-    '- **Live Bike Pricing, Stock & Lowering Kits:** Ask about any off-road/dual-sport/adventure model or tell me what type of bike you want to buy.\n' +
+    '- **Live Bike Pricing, Stock & Lowering Kits:** Ask about any off-road/dual-sport/adventure brand or model (KTM, Honda CRF, Yamaha WR/Ténéré, Kawasaki KLX, Husqvarna FE).\n' +
     '- **Deposits, COD Rules, Warranty & Test Rides:** PayOS VietQR 15-minute holds and showroom bookings in Hanoi, Da Nang, and HCMC.'
   );
 }
@@ -221,14 +377,16 @@ function formatGeneralPurchaseResponse(groundedContext) {
   const { locale, matchedCatalogBikes, liveBikes } = groundedContext;
   const isVi = locale === 'vi';
   const bikes = matchedCatalogBikes.length > 0 ? matchedCatalogBikes : liveBikes.slice(0, 4);
+  const simBrand = getSimulatorBrandName(locale);
 
   const catalogLines = bikes.map((bike) => {
     const seat = bike.geometrySpec?.unladenSeatHeightMm ?? 'N/A';
+    const catLabel = formatCategoryLabel(bike.category, locale);
     const bikeLink = `**${formatBikeLink(bike)}**`;
     if (isVi) {
-      return `- ${bikeLink} (${bike.category} · ${bike.engineCc}cc) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** | Yên: \`${seat} mm\` | Còn **${bike.availableQty}** xe`;
+      return `- ${bikeLink} (${catLabel} · ${bike.engineCc}cc) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** | Yên: \`${seat} mm\` | Còn **${bike.availableQty}** xe`;
     }
-    return `- ${bikeLink} (${bike.category} · ${bike.engineCc}cc) — Price: **${formatMoney(bike.priceVnd, 'en')}** | Seat: \`${seat} mm\` | **${bike.availableQty}** available`;
+    return `- ${bikeLink} (${catLabel} · ${bike.engineCc}cc) — Price: **${formatMoney(bike.priceVnd, 'en')}** | Seat: \`${seat} mm\` | **${bike.availableQty}** available`;
   });
 
   if (isVi) {
@@ -239,7 +397,7 @@ function formatGeneralPurchaseResponse(groundedContext) {
     return (
       'Rất vui được tư vấn chọn xe phù hợp cho bạn tại **DirtFit Commerce**! Một số mẫu xe tiêu biểu theo từng phân khúc hiện có:' +
       body +
-      '\n\nĐể tôi tính chính xác mức **chống chân & Rider Sag** qua Engine 2D, bạn vui lòng cho biết thêm **chiều cao (cm)**, **cân nặng (kg)** và **địa hình chạy chính** (đi phố/tour nhẹ Dual-Sport, off-road Enduro/Motocross hay đường dài Adventure) nhé!'
+      `\n\nĐể tôi tính chính xác mức **chống chân & độ lún phuộc (Rider Sag)** qua ${simBrand}, bạn vui lòng cho biết thêm **chiều cao (cm)**, **cân nặng (kg)** và **địa hình chạy chính** (đi phố/tour nhẹ Dual-Sport, off-road Enduro/Motocross hay đường dài Adventure) nhé!`
     );
   }
 
@@ -250,13 +408,14 @@ function formatGeneralPurchaseResponse(groundedContext) {
   return (
     'I would be glad to help you choose the right motorcycle at **DirtFit Commerce**! Here are representative live models across our segments:' +
     body +
-    '\n\nTo calculate your exact **2D foot contact and Rider Sag** with `@dirtfit/ergonomics-engine`, please share your **height (cm)**, **weight (kg)**, and **primary terrain** (Dual-Sport street/trail, Enduro/MX off-road, or Adventure touring).'
+    `\n\nTo calculate your exact **2D foot contact and suspension sag** with our ${simBrand}, please share your **height (cm)**, **weight (kg)**, and **primary terrain** (Dual-Sport street/trail, Enduro/MX off-road, or Adventure touring).`
   );
 }
 
 /**
  * Deterministic Zero-Key Grounded Fallback Adapter.
- * Generates strictly grounded EN/VI responses from `@dirtfit/knowledge`, `CatalogCache`, and `@dirtfit/ergonomics-engine`.
+ * Generates strictly grounded EN/VI responses from Policy KB, CatalogCache, and Ergonomics Physics
+ * using natural human-readable labels with zero raw enums or internal package identifiers.
  */
 export class GroundedFallbackAdapter {
   /**

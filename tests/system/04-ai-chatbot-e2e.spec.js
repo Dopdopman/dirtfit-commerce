@@ -73,6 +73,27 @@ test.describe('E2E-04: AI Support Chatbot Grounded Citations, Ergonomics Mini Ca
     await page.waitForURL(new RegExp(`${secondHref}$`));
     await expect(page.locator('h1')).toBeVisible();
 
+    // Verify v2.1.3 brand NLU & seat-height spec scoping with zero raw enums
+    // Note: clicking an inline link keeps the drawer open on desktop (>=768px)
+    await expect(drawer).toBeVisible();
+    await drawer.locator('input[type="text"]').fill('có xe ktm không');
+    await drawer.locator('form button[type="submit"]').click();
+    await expect(drawer).toContainText('KTM 350 EXC-F');
+    await expect(
+      drawer.locator('a[data-testid="chat-compact-bike-card"][href="/bikes/ktm-350-exc-f"]')
+    ).toHaveCount(1);
+    await expect(drawer).not.toContainText('ENDURO');
+    await expect(drawer).not.toContainText('DUAL_SPORT');
+    await expect(drawer).not.toContainText('OUT_OF_SCOPE');
+    await expect(drawer).not.toContainText('@dirtfit/');
+
+    await drawer.locator('input[type="text"]').fill('chiều cao yên của ktm là bao nhiêu');
+    await drawer.locator('form button[type="submit"]').click();
+    await expect(drawer).toContainText('963 mm');
+    await expect(
+      drawer.locator('a[data-testid="chat-compact-bike-card"][href="/bikes/ktm-350-exc-f"]')
+    ).toHaveCount(2);
+
     // 4. Reload page -> reopen chat -> persisted messages still present -> rate UP -> Reset
     await page.reload();
     await page.getByTestId('chat-widget-trigger').click();

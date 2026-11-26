@@ -6,6 +6,44 @@ import { hashPassword } from '../../src/modules/auth/auth.crypto.js';
 import { sweepExpiredReservations } from '../../src/modules/sweeper/sweeper.service.js';
 import { parseSetCookies, startTestServer } from './helpers/http-client.js';
 
+const FORBIDDEN_RAW_TOKENS = [
+  'DUAL_SPORT',
+  'MOTOCROSS',
+  'ENDURO',
+  'ADVENTURE',
+  'SUPERMOTO',
+  'FLAT_FOOT',
+  'FLAT_FOOT_BOTH',
+  'BALLS_OF_FEET',
+  'TIP_TOE',
+  'TIPTOES_BOTH',
+  'ONE_FOOT_SHIFT',
+  'ONE_FOOT_DOWN',
+  'TOO_TALL_UNSAFE',
+  'EXTREME_HEIGHT_WARNING',
+  'SNEAKERS',
+  'ADV_BOOTS',
+  'MX_BOOTS',
+  'BAREFOOT',
+  'BIKE_DEPOSIT',
+  'PENDING_PAYMENT',
+  'HN_LONG_BIEN',
+  '@dirtfit/',
+];
+
+function assertNoRawTokens(assistantMessage) {
+  // Strip Markdown link destinations (e.g. /accessories?sku=ACC-ENDURO-LOWSEAT-20) so only visible prose/labels are inspected
+  const visibleContent = (assistantMessage.content || '').replace(/\]\([^)]+\)/g, ']');
+  const haystacks = [
+    visibleContent,
+    ...(assistantMessage.recommendedBikes ?? []).map((b) => b.loweringTip || ''),
+    ...(assistantMessage.citations ?? []).map((c) => c.section || ''),
+  ].join('\n');
+  for (const token of FORBIDDEN_RAW_TOKENS) {
+    expect(haystacks).not.toContain(token);
+  }
+}
+
 describe('Phase 11/12 AI Support Chatbot Grounding, Security, Merge & Metrics (Supertest)', () => {
   let server;
   let app;
@@ -490,6 +528,91 @@ describe('Phase 11/12 AI Support Chatbot Grounding, Security, Merge & Metrics (S
     expect(offTopicRes.status).toBe(201);
     expect(offTopicRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.OUT_OF_SCOPE);
     expect(offTopicRes.body.data.assistantMessage.content).toContain('chỉ hỗ trợ');
+    assertNoRawTokens(offTopicRes.body.data.assistantMessage);
+
+    // v2.1.3 multi-turn NLU entity filtering, session rider hygiene & zero raw enums
+    const ktmCheckRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'có xe ktm không', locale: 'en' });
+    expect(ktmCheckRes.status).toBe(201);
+    const ktmCheckMsg = ktmCheckRes.body.data.assistantMessage;
+    expect(ktmCheckMsg.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmCheckMsg.content).toContain('[KTM 350 EXC-F](/bikes/ktm-350-exc-f)');
+    expect(ktmCheckMsg.recommendedBikes.length).toBeGreaterThan(0);
+    expect(ktmCheckMsg.recommendedBikes.every((b) => b.slug.startsWith('ktm-'))).toBe(true);
+    expect(ktmCheckMsg.recommendedBikes[0].cardMode).toBe('CATALOG');
+    assertNoRawTokens(ktmCheckMsg);
+
+    const ktmProductsRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'có sản phẩm của ktm không', locale: 'en' });
+    expect(ktmProductsRes.status).toBe(201);
+    const ktmProdMsg = ktmProductsRes.body.data.assistantMessage;
+    expect(ktmProdMsg.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmProdMsg.content).toContain('[KTM 350 EXC-F](/bikes/ktm-350-exc-f)');
+    expect(ktmProdMsg.recommendedBikes.every((b) => b.slug.startsWith('ktm-'))).toBe(true);
+    assertNoRawTokens(ktmProdMsg);
+
+    const fitTurnRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: '1m72, 67kg đi xe gì', locale: 'en' });
+    expect(fitTurnRes.status).toBe(201);
+    const fitTurnMsg = fitTurnRes.body.data.assistantMessage;
+    expect(fitTurnMsg.intent).toBe(CHAT_INTENTS.RIDER_FIT_ADVICE);
+    expect(fitTurnMsg.recommendedBikes[0].cardMode).toBe('FIT');
+    assertNoRawTokens(fitTurnMsg);
+
+    // Immediately ask seat height of KTM -> must NOT re-run 172cm/67kg over Honda/Yamaha!
+    const ktmSeatRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'chiều cao yên của ktm là bao nhiêu', locale: 'en' });
+    expect(ktmSeatRes.status).toBe(201);
+    const ktmSeatMsg = ktmSeatRes.body.data.assistantMessage;
+    expect(ktmSeatMsg.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmSeatMsg.content).toContain('963 mm');
+    expect(ktmSeatMsg.content).toContain('[KTM 350 EXC-F](/bikes/ktm-350-exc-f)');
+    expect(ktmSeatMsg.recommendedBikes.length).toBeGreaterThan(0);
+    expect(ktmSeatMsg.recommendedBikes.every((b) => b.slug.startsWith('ktm-'))).toBe(true);
+    expect(ktmSeatMsg.recommendedBikes[0].cardMode).toBe('CATALOG');
+    assertNoRawTokens(ktmSeatMsg);
+
+    // Next follow-up explicitly asks if KTM fits -> inherits 172cm/67kg and scopes ONLY to KTM!
+    const ktmFitFollowRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'tôi đi vừa ktm không', locale: 'en' });
+    expect(ktmFitFollowRes.status).toBe(201);
+    const ktmFitFollowMsg = ktmFitFollowRes.body.data.assistantMessage;
+    expect(ktmFitFollowMsg.intent).toBe(CHAT_INTENTS.RIDER_FIT_ADVICE);
+    expect(ktmFitFollowMsg.recommendedBikes.every((b) => b.slug.startsWith('ktm-'))).toBe(true);
+    expect(ktmFitFollowMsg.recommendedBikes[0].cardMode).toBe('FIT');
+    expect(ktmFitFollowMsg.recommendedBikes[0].simulatorUrl).toContain('heightCm=172');
+    expect(ktmFitFollowMsg.recommendedBikes[0].simulatorUrl).toContain('weightKg=67');
+    assertNoRawTokens(ktmFitFollowMsg);
+
+    const ducatiRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'có xe Ducati không', locale: 'en' });
+    expect(ducatiRes.status).toBe(201);
+    const ducatiMsg = ducatiRes.body.data.assistantMessage;
+    expect(ducatiMsg.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ducatiMsg.recommendedBikes).toEqual([]);
+    expect(ducatiMsg.content).toContain('Ducati');
+    expect(ducatiMsg.content).toContain('KTM');
+    assertNoRawTokens(ducatiMsg);
+
+    const trickedOffTopicRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'viết code python về ktm', locale: 'en' });
+    expect(trickedOffTopicRes.status).toBe(201);
+    expect(trickedOffTopicRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.OUT_OF_SCOPE);
+    assertNoRawTokens(trickedOffTopicRes.body.data.assistantMessage);
 
     // Verify /health/ready commit field with RENDER_GIT_COMMIT unset and configured
     const defaultHealthRes = await request.get('/health/ready');

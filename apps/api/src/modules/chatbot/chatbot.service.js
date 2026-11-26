@@ -1,6 +1,7 @@
 import { AppError, CHAT_INTENTS, CHAT_ROLES, ERROR_CODES } from '@dirtfit/shared';
 import { resolveChatAdapter } from './adapters/chat-adapter.factory.js';
 import { buildGroundedChatContext } from './context-builder.js';
+import { humanizeAssistantCopy } from './human-labels.js';
 import {
   buildGuardrailRefusalMessage,
   detectPromptInjection,
@@ -150,8 +151,9 @@ export async function sendChatMessage(app, owner, payload) {
 
   const adapter = resolveChatAdapter(app.env, app.log);
   const adapterResult = await adapter.generate(groundedContext);
+  const humanizedContent = humanizeAssistantCopy(adapterResult.content, effectiveLocale);
   const groundedContent = linkifyGroundedProducts(
-    adapterResult.content,
+    humanizedContent,
     groundedContext.liveBikes,
     groundedContext.groundedAccessories
   );

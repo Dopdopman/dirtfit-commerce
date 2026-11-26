@@ -3,6 +3,7 @@ export const CATALOG_CACHE_PREFIX = 'df:catalog:';
 export const CATALOG_KEYS = Object.freeze({
   BRANDS: `${CATALOG_CACHE_PREFIX}brands`,
   BIKE_FIT_PROJECTIONS: `${CATALOG_CACHE_PREFIX}bikes:fit-projections`,
+  PUBLIC_ACCESSORIES: `${CATALOG_CACHE_PREFIX}accessories:public`,
   bikeDetail: (slug) => `${CATALOG_CACHE_PREFIX}bike:slug:${slug}`,
   accessoryDetail: (slug) => `${CATALOG_CACHE_PREFIX}accessory:slug:${slug}`,
 });

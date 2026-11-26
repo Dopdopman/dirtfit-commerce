@@ -168,7 +168,10 @@ export class GeminiChatAdapter {
    * @returns {Promise<{ content: string, provider: string, degraded: boolean }>}
    */
   async generate(groundedContext) {
-    if (groundedContext.intent === CHAT_INTENTS.GREETING) {
+    if (
+      groundedContext.intent === CHAT_INTENTS.GREETING ||
+      groundedContext.intent === CHAT_INTENTS.OUT_OF_SCOPE
+    ) {
       return this.fallbackAdapter.generate(groundedContext);
     }
 

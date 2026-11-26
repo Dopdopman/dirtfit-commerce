@@ -1,9 +1,11 @@
 import { evaluateBikeFit } from '@dirtfit/ergonomics-engine';
 import { CHAT_INTENTS, FOOTWEAR_TYPES } from '@dirtfit/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { normalizeOptionalApiKey } from '../../src/config/env.js';
 import { GroundedFallbackAdapter } from '../../src/modules/chatbot/adapters/fallback.adapter.js';
 import { GeminiChatAdapter } from '../../src/modules/chatbot/adapters/gemini.adapter.js';
 import { evaluateCatalogForRider } from '../../src/modules/chatbot/context-builder.js';
+import { humanizeAssistantCopy } from '../../src/modules/chatbot/human-labels.js';
 import {
   buildGuardrailRefusalMessage,
   detectPromptInjection,
@@ -17,6 +19,31 @@ import {
   resolveEffectiveLocale,
 } from '../../src/modules/chatbot/intent-router.js';
 import { linkifyGroundedProducts } from '../../src/modules/chatbot/link-grounder.js';
+
+const FORBIDDEN_RAW_TOKENS = [
+  'DUAL_SPORT',
+  'MOTOCROSS',
+  'ENDURO',
+  'ADVENTURE',
+  'SUPERMOTO',
+  'FLAT_FOOT',
+  'FLAT_FOOT_BOTH',
+  'BALLS_OF_FEET',
+  'TIP_TOE',
+  'TIPTOES_BOTH',
+  'ONE_FOOT_SHIFT',
+  'ONE_FOOT_DOWN',
+  'TOO_TALL_UNSAFE',
+  'EXTREME_HEIGHT_WARNING',
+  'SNEAKERS',
+  'ADV_BOOTS',
+  'MX_BOOTS',
+  'BAREFOOT',
+  'BIKE_DEPOSIT',
+  'PENDING_PAYMENT',
+  'HN_LONG_BIEN',
+  '@dirtfit/',
+];
 
 const MOCK_BIKES = [
   {
@@ -179,6 +206,118 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     expect(hasExplicitPolicySignal('Mua xe đặt cọc bao lâu?')).toBe(true);
     expect(hasExplicitPolicySignal('Chính sách bảo mật dữ liệu')).toBe(true);
     expect(hasExplicitPolicySignal('Xe được bảo hành bao lâu?')).toBe(true);
+
+    // v2.1.3 dynamic brand, unstocked brand, specFocus, numeric collision prevention & off-topic guard
+    const ktmAndHuskyBikes = [
+      ...MOCK_BIKES,
+      {
+        id: '00000000-0000-4000-8000-000000000004',
+        slug: 'ktm-350-exc-f',
+        name: 'KTM 350 EXC-F',
+        category: 'ENDURO',
+        engineCc: 350,
+        priceVnd: 325000000,
+        depositAmountVnd: 20000000,
+        availableQty: 2,
+        brand: { slug: 'ktm', name: 'KTM' },
+        geometrySpec: { ...MOCK_BIKES[0].geometrySpec, unladenSeatHeightMm: 963 },
+        compatibilities: [],
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000005',
+        slug: 'husqvarna-fe-350',
+        name: 'Husqvarna FE 350',
+        category: 'ENDURO',
+        engineCc: 350,
+        priceVnd: 335000000,
+        depositAmountVnd: 20000000,
+        availableQty: 1,
+        brand: { slug: 'husqvarna', name: 'Husqvarna' },
+        geometrySpec: { ...MOCK_BIKES[0].geometrySpec, unladenSeatHeightMm: 952 },
+        compatibilities: [],
+      },
+    ];
+
+    const ktmStockCheck = classifyChatIntent('có xe ktm không', ktmAndHuskyBikes);
+    expect(ktmStockCheck.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmStockCheck.catalogEntities.requestedBrands).toEqual(['ktm']);
+    expect(resolveEffectiveLocale('co xe ktm khong', 'en')).toBe('vi');
+
+    const ktmProductCheck = classifyChatIntent('có sản phẩm của ktm không', ktmAndHuskyBikes);
+    expect(ktmProductCheck.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmProductCheck.catalogEntities.requestedBrands).toEqual(['ktm']);
+    expect(ktmProductCheck.catalogEntities.asksProductsBroadly).toBe(true);
+
+    const ktmSeatHeightCheck = classifyChatIntent(
+      'chiều cao yên của ktm là bao nhiêu',
+      ktmAndHuskyBikes
+    );
+    expect(ktmSeatHeightCheck.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmSeatHeightCheck.catalogEntities.requestedBrands).toEqual(['ktm']);
+    expect(ktmSeatHeightCheck.catalogEntities.specFocus).toBe('SEAT_HEIGHT');
+
+    const ducatiCheck = classifyChatIntent('có xe Ducati không', ktmAndHuskyBikes);
+    expect(ducatiCheck.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ducatiCheck.catalogEntities.unstockedBrands).toEqual(['Ducati']);
+    expect(ducatiCheck.catalogEntities.requestedBrands).toEqual([]);
+
+    const ktmFitWithDim = classifyChatIntent('1m72 đi xe KTM có vừa không?', ktmAndHuskyBikes);
+    expect(ktmFitWithDim.intent).toBe(CHAT_INTENTS.RIDER_FIT_ADVICE);
+    expect(ktmFitWithDim.catalogEntities.requestedBrands).toEqual(['ktm']);
+
+    const ktmFitFollowup = classifyChatIntent('tôi đi vừa ktm không', ktmAndHuskyBikes);
+    expect(ktmFitFollowup.intent).toBe(CHAT_INTENTS.RIDER_FIT_ADVICE);
+    expect(ktmFitFollowup.catalogEntities.requestedBrands).toEqual(['ktm']);
+
+    const ktm350Price = classifyChatIntent('giá KTM 350', ktmAndHuskyBikes);
+    expect(ktm350Price.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktm350Price.mentionedSlugs).toEqual(['ktm-350-exc-f']);
+
+    const trickedOffTopic = classifyChatIntent('viết code python về ktm', ktmAndHuskyBikes);
+    expect(trickedOffTopic.intent).toBe(CHAT_INTENTS.OUT_OF_SCOPE);
+
+    // evaluateCatalogForRider brand scoping + humanized loweringTip
+    const ktmOnlyFit = evaluateCatalogForRider({
+      bikes: ktmAndHuskyBikes,
+      riderProfile: { heightCm: 172, weightKg: 67, footwear: FOOTWEAR_TYPES.SNEAKERS },
+      locale: 'vi',
+      brandSlugs: ['ktm'],
+      maxResults: 3,
+    });
+    expect(ktmOnlyFit.length).toBe(1);
+    expect(ktmOnlyFit[0].slug).toBe('ktm-350-exc-f');
+  });
+
+  it('humanizes raw enums and internal package names while preserving Markdown URLs and normalizes API keys', () => {
+    const rawVi =
+      'Đánh giá từ `@dirtfit/ergonomics-engine`: [Honda CRF300L](/bikes/honda-crf300l) (DUAL_SPORT) — giày SNEAKERS, Chống phần ức bàn chân vững (BALLS_OF_FEET), Enduro, phụ kiện [Zeta Link](/accessories?sku=ACC-ZETA-LINK-30).';
+    const cleanVi = humanizeAssistantCopy(rawVi, 'vi');
+
+    expect(cleanVi).toContain('hệ thống mô phỏng tư thế 2D DirtFit');
+    expect(cleanVi).toContain('[Honda CRF300L](/bikes/honda-crf300l)');
+    expect(cleanVi).toContain('[Zeta Link](/accessories?sku=ACC-ZETA-LINK-30)');
+    expect(cleanVi).toContain('Enduro');
+    expect(cleanVi).toContain('giày thể thao');
+    expect(cleanVi).not.toContain(' (BALLS_OF_FEET)');
+    for (const token of FORBIDDEN_RAW_TOKENS) {
+      expect(cleanVi).not.toContain(token);
+    }
+
+    const cleanEn = humanizeAssistantCopy(
+      'Fit via @dirtfit/ergonomics-engine for ENDURO rider in MX_BOOTS -> TOO_TALL_UNSAFE',
+      'en'
+    );
+    expect(cleanEn).toContain('DirtFit 2D Rider Fit simulator');
+    expect(cleanEn).toContain('Enduro');
+    expect(cleanEn).toContain('MX boots');
+    for (const token of FORBIDDEN_RAW_TOKENS) {
+      expect(cleanEn).not.toContain(token);
+    }
+
+    expect(normalizeOptionalApiKey('  "AIzaTestKey123"  ')).toBe('AIzaTestKey123');
+    expect(normalizeOptionalApiKey(" 'AIzaTestKeySingle' ")).toBe('AIzaTestKeySingle');
+    expect(normalizeOptionalApiKey('   ')).toBeUndefined();
+    expect(normalizeOptionalApiKey(undefined)).toBeUndefined();
   });
 
   it('produces exact numerical parity with @dirtfit/ergonomics-engine evaluateBikeFit()', () => {
@@ -215,6 +354,9 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     expect(recommended[0].contactStatus).toBe(directEval.footContact.contactStatus);
     expect(recommended[0].fitScore).toBe(directEval.fitScore);
     expect(recommended[0].simulatorUrl).toBe('/bikes/honda-crf300l?heightCm=165&weightKg=60');
+    for (const token of FORBIDDEN_RAW_TOKENS) {
+      expect(recommended[0].loweringTip ?? '').not.toContain(token);
+    }
   });
 
   it('validates, repairs, strips hallucinated/unsafe links, and safely auto-links grounded bikes longest-first', () => {
@@ -345,22 +487,30 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     expect(JSON.stringify(warnPayload)).not.toContain('AIzaLeakedDummySecret123456');
     expect(JSON.stringify(warnPayload)).not.toContain('AIzaTestSecretKeyHeaderOnly');
 
-    // Deterministic GREETING fast-path skips Gemini network calls entirely
-    const greetingFetchMock = vi.fn();
-    const fastGreetingAdapter = new GeminiChatAdapter({
+    // Deterministic GREETING & OUT_OF_SCOPE fast-paths skip Gemini network calls entirely
+    const fastPathFetchMock = vi.fn();
+    const fastPathAdapter = new GeminiChatAdapter({
       apiKey: 'AIzaTestSecretKeyHeaderOnly',
       model: 'gemini-2.5-flash',
       fallbackAdapter,
-      fetchImpl: greetingFetchMock,
+      fetchImpl: fastPathFetchMock,
     });
-    const greetingRes = await fastGreetingAdapter.generate({
+    const greetingRes = await fastPathAdapter.generate({
       ...groundedCtx,
       intent: CHAT_INTENTS.GREETING,
       locale: 'vi',
     });
-    expect(greetingFetchMock).not.toHaveBeenCalled();
+    const outOfScopeRes = await fastPathAdapter.generate({
+      ...groundedCtx,
+      intent: CHAT_INTENTS.OUT_OF_SCOPE,
+      locale: 'vi',
+    });
+    expect(fastPathFetchMock).not.toHaveBeenCalled();
     expect(greetingRes.provider).toBe('grounded-fallback');
     expect(greetingRes.degraded).toBe(false);
     expect(greetingRes.content).toContain('DirtFit Commerce');
+    expect(outOfScopeRes.provider).toBe('grounded-fallback');
+    expect(outOfScopeRes.degraded).toBe(false);
+    expect(outOfScopeRes.content).toContain('DirtFit Commerce');
   });
 });
