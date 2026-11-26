@@ -314,3 +314,11 @@ Chi tiết tại [12-real-product-media-and-rich-cart.md](./12-real-product-medi
 - **Zero-Downtime Migration trên Neon (`cd.yml`):** Migration `20261126000000_v21_product_media` tự chạy CTE dọn trùng `is_primary` trước khi tạo `uq_bike_single_primary_photo` và chỉ thêm 1 cột nullable `accessories.image_storage_key` — an toàn tuyệt đối khi `cd.yml` áp migration trước khi khởi động container API mới.
 - **Production Security Gate & Smoke Check (`scripts/smoke-stack.mjs --expect-prod`):** Mở rộng kiểm chứng `/api/v1/bikes` có đầy đủ contract media mới (`coverImageKind`, `galleryImages`, `blueprintImageUrl`), xác nhận `/api/v1/media/local/*` trả **`404`** khi `NODE_ENV=production`, và kiểm tra HTTP `200` cho `/cart` cùng `/accessories?sku=ACC-ZETA-LINK-30`.
 - **Playwright CI (`ci.yml`):** Job `system-e2e` tự động chạy thêm spec thứ 7 (`tests/system/07-media-gallery-and-rich-cart.spec.js`) dùng `STORAGE_DRIVER=local` (không cần credential R2 trên GitHub Actions).
+
+---
+
+## 8. v2.1.1 CD Commit Synchronization Delta (`RENDER_GIT_COMMIT`)
+
+Chi tiết tại [14-v211-ux-cd-chatbot-refinements.md](./14-v211-ux-cd-chatbot-refinements.md) (Trụ cột 2):
+- **`GET /health/ready` (`apps/api/src/modules/health/health.routes.js`):** Bổ sung trường không nhạy cảm `commit` đọc từ `RENDER_GIT_COMMIT || GIT_COMMIT_SHA || null`, tương thích ngược 100% với Docker healthcheck và `smoke-stack.mjs`.
+- **Loại bỏ Race Condition trên `.github/workflows/cd.yml`:** Khi `API_DEPLOY_HOOK_URL` trỏ về Render (`*api.render.com*`), vòng chờ kiểm tra `/health/ready` lặp tối đa `40 × 15s = 600s` (10 phút) cho tới khi đồng thời thỏa `status === "ready"` **VÀ** `commit === "${GITHUB_SHA}"` (parse JSON an toàn bằng `node -e`, không phụ thuộc `jq`), sau đó mới kích hoạt Vercel Deploy Hook (nếu cấu hình) và chạy `smoke-stack.mjs --expect-prod` kèm `--expected-commit`. Với các môi trường không dùng Render hook, giữ nguyên cơ chế chờ `status === "ready"`.

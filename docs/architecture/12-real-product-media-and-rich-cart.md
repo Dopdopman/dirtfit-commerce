@@ -434,3 +434,12 @@ Bảo toàn 100% **107 bài test hiện có** (`64 Unit + 37 Supertest Integrati
 | File Spec | Kịch bản E2E bổ sung / mở rộng |
 | :--- | :--- |
 | `tests/system/05-checkout-payment-testride.spec.js` *(hoặc spec bổ sung `07-media-gallery-and-rich-cart.spec.js`)* | **Đề xuất tạo mới `tests/system/07-media-gallery-and-rich-cart.spec.js`** (giữ 6 spec cũ nguyên trạng, dễ khoanh vùng khi debug CI):<br>1. Đăng nhập `ADMIN` → vào `/admin/bikes/[id]` (chọn 1 xe) → upload ảnh thật PNG hợp lệ ở **Section Real Product Photos** → xác nhận hiển thị badge `COVER PHOTO` trong lưới ảnh Admin và không làm hỏng phần 2D Calibration bên dưới.<br>2. Vào `/admin/accessories` → mở Edit 1 phụ kiện → upload ảnh PNG hợp lệ → xác nhận thumbnail hiển thị trong bảng.<br>3. Ra Storefront `/bikes` & `/bikes/[slug]` → xác nhận `<img>` thật load thành công (`naturalWidth > 0`) và hiển thị trong Gallery.<br>4. Ra `/accessories` → xác nhận ảnh phụ kiện load thành công (`naturalWidth > 0`), thêm cả xe và phụ kiện vào Giỏ hàng.<br>5. Vào `/cart` → xác nhận cả 2 dòng có thumbnail load thật (`naturalWidth > 0`), bấm link xe máy mở đúng `/bikes/[slug]`, quay lại `/cart` bấm link phụ kiện mở đúng `/accessories?sku=...` với card được highlight (`data-highlighted-sku`).<br>6. Dọn sạch media test vừa tạo ở cuối test để giữ sạch DB cho các lượt chạy sau. |
+
+---
+
+## 8. v2.1.1 Client-Side Image Magic Bytes Sniffer Delta
+
+Chi tiết tại [14-v211-ux-cd-chatbot-refinements.md](./14-v211-ux-cd-chatbot-refinements.md) (Trụ cột 1):
+- **Xử lý triệt để ảnh CDN có đuôi `.png`/`.jpg` nhưng chứa dữ liệu WebP:** Bổ sung `detectImageMimeFromBytes()`, `detectBrowserImageMime()`, `normalizeFilenameExtension()` và `inspectImageFileForUpload()` trong `apps/web/src/lib/media-helpers.js` đọc 16 byte đầu file ngay tại trình duyệt (`file.slice(0, 16).arrayBuffer()`), tự chuẩn hóa MIME nhị phân thật (`image/jpeg` | `image/png` | `image/webp`) đồng bộ cho cả 3 bước `presign → PUT Content-Type → confirm`.
+- **Chặn sớm trước khi gọi API:** Các tệp AVIF, GIF, SVG, HTML/JS đổi đuôi hoặc nhỏ hơn 12 byte / vượt 5MB bị từ chối ngay trên `AccessoryPhotoUploader.jsx`, `BikePhotoManager.jsx` và `BlueprintCalibrationTool.jsx` với thông báo song ngữ EN/VI (`media.unsupportedBinaryFormat`), không tốn request R2.
+- **Bảo mật không đổi:** Lớp kiểm tra 4KB Magic Bytes + xóa object giả mạo + `AuditLog` trên `apps/api` giữ nguyên 100%, không nới lỏng.

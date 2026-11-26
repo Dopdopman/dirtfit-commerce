@@ -309,3 +309,15 @@ model ChatMessage {
     - **Mini Fit Recommendation Card:** Khi `recommendedBikes.length > 0`, hiển thị card kỹ thuật gọn gồm: tên xe, chiều cao yên thực tế (`JetBrains Mono tabular-nums`, ví dụ `818 mm`), badge chống chân chuẩn màu `--fit-*`, giá VND, gợi ý hạ yên (nếu có), và nút **`Open 2D Simulator / Mở Mô phỏng 2D`** trỏ thẳng tới `/bikes/[slug]`.
     - **Message Actions:** Nút `Copy`, đánh giá `👍` / `👎` (`POST /api/v1/chat/messages/:id/feedback`), và thông báo nhã nhặn nếu phiên đang ở chế độ `Grounded Knowledge Mode` (fallback không cần API key).
     - **Accessibility:** Hỗ trợ phím `Escape` đóng drawer, `aria-label` đầy đủ, `aria-live="polite"` cho tin nhắn mới, tự động scroll xuống cuối mượt mà.
+
+---
+
+## 9. v2.1.1 Chatbot Language Resolution, Intents & Fallback Observability Delta
+
+Chi tiết tại [14-v211-ux-cd-chatbot-refinements.md](./14-v211-ux-cd-chatbot-refinements.md) (Trụ cột 3):
+- **Nhận diện Ngôn ngữ theo Tin nhắn (`resolveEffectiveLocale`):** Ưu tiên ngôn ngữ thực tế khách nhắn (dấu Tiếng Việt → cụm từ Tiếng Việt không dấu đặc trưng → cụm từ Tiếng Anh rõ ràng → fallback về `locale` của UI cho câu trung tính), áp dụng thống nhất cho guardrail refusal, grounding context và persistence mà không làm thay đổi cookie giao diện `dirtfit_locale`.
+- **Bổ sung 2 Intent mới qua Migration Enum Zero-Downtime (`ALTER TYPE "ChatIntent" ADD VALUE IF NOT EXISTS`):**
+  - **`GREETING`** (`"alo"`, `"xin chào"`, `"chào shop"`, `"hi"`, `"hello"`): xử lý theo **deterministic fast-path** (không tiêu tốn quota Gemini Free Tier), chào thân thiện và nêu 3 năng lực thật của DirtFit.
+  - **`GENERAL_PURCHASE`** (`"tôi muốn mua"`, `"cần tư vấn"`, `"buy a bike"`, `"recommend a bike"`): nạp ngữ cảnh danh mục xe live + khoảng giá và chủ động hỏi chiều cao, cân nặng, địa hình để tính bằng `@dirtfit/ergonomics-engine` ở lượt kế tiếp.
+  - Bảo toàn 100% lớp chặn `detectPromptInjection` và `OUT_OF_SCOPE` cho câu hỏi ngoài phạm vi.
+- **Structured Fallback Logging (`gemini.adapter.js` & `chat-adapter.factory.js`):** Ghi `logger.warn` có cấu trúc (`event: 'chatbot_gemini_fallback'`, `statusCode`, `errorCode`, `model`, `latencyMs`, `attempts`, `errorSummary` đã làm sạch secret) mỗi khi Gemini lỗi/429/timeout và cảnh báo 1 lần mỗi process khi `CHAT_PROVIDER=auto` thiếu `GEMINI_API_KEY`, tuyệt đối không log API key hay PII.
