@@ -6,6 +6,7 @@ import {
   detectPromptInjection,
   sanitizeChatInput,
 } from './injection-guard.js';
+import { resolveEffectiveLocale } from './intent-router.js';
 import {
   createChatSession,
   deleteOwnedChatSessions,
@@ -78,7 +79,7 @@ export async function getOrInitChatSession(app, owner, { locale = 'en', limit = 
  */
 export async function sendChatMessage(app, owner, payload) {
   const startedAt = Date.now();
-  const safeLocale = payload.locale === 'vi' ? 'vi' : 'en';
+  const uiLocale = payload.locale === 'vi' ? 'vi' : 'en';
   const cleanedMessage = sanitizeChatInput(payload.message);
 
   if (!cleanedMessage) {
@@ -90,13 +91,15 @@ export async function sendChatMessage(app, owner, payload) {
     });
   }
 
+  const effectiveLocale = resolveEffectiveLocale(cleanedMessage, uiLocale);
+
   const expiresAt = computeSessionExpiry(app.env, Boolean(owner.userId));
   let session = await findActiveSessionByOwner(app.prisma, { ...owner, now: new Date() });
   if (!session) {
     session = await createChatSession(app.prisma, {
       userId: owner.userId,
       guestTokenHash: owner.guestTokenHash,
-      locale: safeLocale,
+      locale: effectiveLocale,
       expiresAt,
     });
   }
@@ -107,10 +110,10 @@ export async function sendChatMessage(app, owner, payload) {
       { pattern: injectionCheck.matchedPattern, sessionId: session.id },
       'Blocked suspected prompt injection attempt in chatbot pipeline'
     );
-    const refusalText = buildGuardrailRefusalMessage(safeLocale);
+    const refusalText = buildGuardrailRefusalMessage(effectiveLocale);
     const persisted = await persistChatTurn(app.prisma, {
       sessionId: session.id,
-      locale: safeLocale,
+      locale: effectiveLocale,
       expiresAt,
       userContent: cleanedMessage,
       userIntent: CHAT_INTENTS.OUT_OF_SCOPE,
@@ -138,7 +141,7 @@ export async function sendChatMessage(app, owner, payload) {
   const groundedContext = await buildGroundedChatContext({
     app,
     message: cleanedMessage,
-    locale: safeLocale,
+    locale: effectiveLocale,
     history: recentHistory,
     userId: owner.userId,
     riderProfileInput: payload.riderProfile ?? null,
@@ -150,7 +153,7 @@ export async function sendChatMessage(app, owner, payload) {
 
   const persisted = await persistChatTurn(app.prisma, {
     sessionId: session.id,
-    locale: safeLocale,
+    locale: effectiveLocale,
     expiresAt,
     userContent: cleanedMessage,
     userIntent: groundedContext.intent,

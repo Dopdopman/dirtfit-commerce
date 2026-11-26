@@ -165,6 +165,8 @@ enum ChatFeedback {
 }
 
 enum ChatIntent {
+  GREETING
+  GENERAL_PURCHASE
   POLICY_ORDERING
   POLICY_TERMS
   POLICY_WARRANTY

@@ -45,45 +45,113 @@ jobs:
           fi
           curl --fail --show-error --silent -X POST "$API_DEPLOY_HOOK_URL"
 
-      - name: Wait for API /health/ready (handles Free Tier cold start)
+      - name: Wait for API /health/ready (sync commit on Render or cold-start ready)
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          API_DEPLOY_HOOK_URL: ${{ secrets.API_DEPLOY_HOOK_URL }}
+          TARGET_COMMIT: ${{ github.sha }}
         run: |
           if [ -z "$API_BASE_URL" ]; then
             echo "API_BASE_URL secret is not configured; skipping API readiness wait."
             exit 0
           fi
-          for i in $(seq 1 36); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${API_BASE_URL%/}/health/ready" || true)
-            echo "Attempt $i -> /health/ready HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              exit 0
+
+          EXPECT_COMMIT_SYNC=false
+          case "$API_DEPLOY_HOOK_URL" in
+            *api.render.com*) EXPECT_COMMIT_SYNC=true ;;
+          esac
+
+          if [ "$EXPECT_COMMIT_SYNC" = "true" ]; then
+            MAX_ATTEMPTS=40
+            SLEEP_SECONDS=15
+          else
+            MAX_ATTEMPTS=36
+            SLEEP_SECONDS=5
+          fi
+
+          echo "Waiting for API readiness (EXPECT_COMMIT_SYNC=$EXPECT_COMMIT_SYNC, TARGET_COMMIT=$TARGET_COMMIT, max=${MAX_ATTEMPTS}x${SLEEP_SECONDS}s)..."
+
+          LAST_HTTP=""
+          LAST_STATUS=""
+          LAST_COMMIT=""
+
+          for i in $(seq 1 "$MAX_ATTEMPTS"); do
+            TMP_BODY=$(mktemp)
+            HTTP_CODE=$(curl -sS -o "$TMP_BODY" -w "%{http_code}" "${API_BASE_URL%/}/health/ready" || echo "000")
+            PARSED=$(node -e '
+              const fs = require("node:fs");
+              try {
+                const body = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                const st = typeof body?.status === "string" ? body.status : "";
+                const cm = typeof body?.commit === "string" ? body.commit : "";
+                console.log(JSON.stringify({ status: st, commit: cm }));
+              } catch {
+                console.log("{\"status\":\"\",\"commit\":\"\"}");
+              }
+            ' "$TMP_BODY")
+            rm -f "$TMP_BODY"
+
+            READY_STATUS=$(node -e 'console.log(JSON.parse(process.argv[1]).status || "")' "$PARSED")
+            LIVE_COMMIT=$(node -e 'console.log(JSON.parse(process.argv[1]).commit || "")' "$PARSED")
+
+            LAST_HTTP="$HTTP_CODE"
+            LAST_STATUS="$READY_STATUS"
+            LAST_COMMIT="$LIVE_COMMIT"
+
+            echo "[Attempt $i/$MAX_ATTEMPTS] HTTP=$HTTP_CODE status=${READY_STATUS:-unknown} live_commit=${LIVE_COMMIT:-none} target_commit=$TARGET_COMMIT"
+
+            if [ "$HTTP_CODE" = "200" ] && [ "$READY_STATUS" = "ready" ]; then
+              if [ "$EXPECT_COMMIT_SYNC" != "true" ] || [ "$LIVE_COMMIT" = "$TARGET_COMMIT" ]; then
+                echo "API is ready and synchronized (live_commit=${LIVE_COMMIT:-n/a})."
+                exit 0
+              fi
             fi
-            sleep 5
+
+            sleep "$SLEEP_SECONDS"
           done
-          echo "API did not become ready within 180s"
+
+          echo "::error::API readiness/commit sync timed out after $((MAX_ATTEMPTS * SLEEP_SECONDS))s (last HTTP=$LAST_HTTP, status=${LAST_STATUS:-unknown}, live_commit=${LAST_COMMIT:-none}, target_commit=$TARGET_COMMIT). Inspect Render Build/Deploy Logs."
           exit 1
 
-      - name: Trigger Web Deploy Hook (Vercel)
+      - name: Trigger Web Deploy Hook (Vercel) & wait for Web HTTP 200
         env:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          WEB_BASE_URL: ${{ secrets.WEB_BASE_URL }}
         run: |
           if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
             echo "VERCEL_DEPLOY_HOOK_URL secret is not configured; skipping Vercel deploy hook."
             exit 0
           fi
           curl --fail --show-error --silent -X POST "$VERCEL_DEPLOY_HOOK_URL"
+          if [ -n "$WEB_BASE_URL" ]; then
+            sleep 15
+            for i in $(seq 1 12); do
+              WEB_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${WEB_BASE_URL%/}/" || echo "000")
+              echo "Web warmup check $i/12 -> HTTP $WEB_CODE"
+              if [ "$WEB_CODE" = "200" ]; then
+                exit 0
+              fi
+              sleep 5
+            done
+          fi
 
       - name: Post-deploy production smoke check
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           WEB_BASE_URL: ${{ secrets.WEB_BASE_URL }}
+          API_DEPLOY_HOOK_URL: ${{ secrets.API_DEPLOY_HOOK_URL }}
+          TARGET_COMMIT: ${{ github.sha }}
         run: |
           if [ -z "$API_BASE_URL" ] || [ -z "$WEB_BASE_URL" ]; then
             echo "API_BASE_URL or WEB_BASE_URL secret is not configured; skipping post-deploy smoke check."
             exit 0
           fi
+          EXTRA_ARGS=""
+          case "$API_DEPLOY_HOOK_URL" in
+            *api.render.com*) EXTRA_ARGS="--expected-commit $TARGET_COMMIT" ;;
+          esac
           node scripts/smoke-stack.mjs \
             --api-url "$API_BASE_URL" \
             --web-url "$WEB_BASE_URL" \
-            --expect-prod
+            --expect-prod \
+            $EXTRA_ARGS

@@ -22,9 +22,9 @@ import {
 } from '@/lib/calibration-helpers';
 import { localizeApiError } from '@/lib/i18n/translate';
 import {
+  inspectImageFileForUpload,
   readBrowserImageDimensions,
   resolveClientMediaUrl,
-  validateImageFileForUpload,
 } from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
@@ -187,14 +187,16 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
     const file = e.target.files?.[0];
     if (!file || !isAdmin) return;
 
-    const check = validateImageFileForUpload(file);
+    const check = await inspectImageFileForUpload(file);
     if (!check.valid) {
       setUploadError(
-        check.errorCode === 'INVALID_TYPE'
-          ? t('media.invalidFileType')
-          : check.errorCode === 'FILE_TOO_LARGE'
-            ? t('media.fileTooLarge')
-            : t('media.emptyFile')
+        check.errorCode === 'UNSUPPORTED_BINARY_FORMAT'
+          ? t('media.unsupportedBinaryFormat')
+          : check.errorCode === 'INVALID_TYPE'
+            ? t('media.invalidFileType')
+            : check.errorCode === 'FILE_TOO_LARGE'
+              ? t('media.fileTooLarge')
+              : t('media.emptyFile')
       );
       e.target.value = '';
       return;
@@ -213,7 +215,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
           mediaType: 'SIDE_PROFILE_BLUEPRINT',
           mimeType: check.mimeType,
           sizeBytes: file.size,
-          originalFileName: file.name.slice(0, 180),
+          originalFileName: check.normalizedFileName,
         },
       });
 
@@ -221,7 +223,7 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
       const putRes = await fetch(presign.uploadUrl, {
         method: presign.method || 'PUT',
         headers: {
-          'content-type': check.mimeType,
+          'Content-Type': check.mimeType,
         },
         body: file,
       });
@@ -263,8 +265,14 @@ export default function BlueprintCalibrationTool({ bike, isAdmin, onBikeUpdated 
         URL.revokeObjectURL(dims.objectUrl);
       }
 
+      const normNote = check.mimeCorrected
+        ? ` · ${t('media.mimeAutoNormalized', {
+            detected: check.mimeType,
+            declared: check.declaredMime || file.name,
+          })}`
+        : '';
       setUploadStatus(
-        `${confirmRes?.verifiedMime || check.mimeType} · ${dims.widthPx}x${dims.heightPx}px`
+        `${confirmRes?.verifiedMime || check.mimeType} · ${dims.widthPx}x${dims.heightPx}px${normNote}`
       );
       await onBikeUpdated();
     } catch (err) {

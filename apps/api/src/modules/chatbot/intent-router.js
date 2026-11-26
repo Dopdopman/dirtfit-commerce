@@ -6,6 +6,46 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+const VIETNAMESE_DIACRITIC_REGEX =
+  /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+const UNACCENTED_VI_REGEX =
+  /\b(alo+|a lo|xin chao|chao shop|chao ad|chao admin|chao ban|co ai khong|shop oi|ad oi|toi muon|minh muon|muon mua|can mua|can tu van|tu van|gia xe|hoi gia|bao nhieu|dat coc|coc xe|chieu cao|can nang|chong chan|lai thu|phu kien|ha yen|bao hanh|dieu khoan|don hang|xe nao|mua xe|cho minh hoi|viet code)\b/i;
+
+const CLEAR_EN_REGEX =
+  /\b(hello|hi there|hey|good morning|good afternoon|good evening|how much|how do|how does|which bike|want to buy|buy a bike|buy a motorcycle|looking for|recommend|deposit|warranty|returns|terms|privacy|test ride|seat height|fits me|fit me|check my order|order status|what is|can i|do you)\b/i;
+
+/**
+ * Resolve effective response locale (`'en'` | `'vi'`) prioritizing the actual language of the user message,
+ * falling back cleanly to `uiLocale` for neutral/short model-name or measurement messages.
+ * @param {string} message
+ * @param {'en'|'vi'} [uiLocale]
+ * @returns {'en'|'vi'}
+ */
+export function resolveEffectiveLocale(message, uiLocale = 'en') {
+  const raw = String(message ?? '').trim();
+  const fallbackLocale = uiLocale === 'vi' ? 'vi' : 'en';
+
+  if (!raw) {
+    return fallbackLocale;
+  }
+
+  if (VIETNAMESE_DIACRITIC_REGEX.test(raw)) {
+    return 'vi';
+  }
+
+  const folded = foldVietnameseText(raw);
+  if (UNACCENTED_VI_REGEX.test(folded)) {
+    return 'vi';
+  }
+
+  if (CLEAR_EN_REGEX.test(folded)) {
+    return 'en';
+  }
+
+  return fallbackLocale;
+}
+
 /**
  * Extract rider body dimensions, footwear, and motorcycle category preference from EN/VI free text.
  * Supports formats such as `1m68`, `1.68m`, `168cm`, `65kg`, `65 cân`, `inseam 78cm`, `MX boots`.
@@ -206,14 +246,42 @@ const KEYWORD_RULES = Object.freeze([
     intent: CHAT_INTENTS.CATALOG_PRICING,
     docSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
     patterns: [
-      /\b(price|gia ban|gia xe|bao nhieu|cost|stock|ton kho|con hang|available|spec|thong so|engine|phan khoi|cc|dual[- ]?sport|enduro|motocross|adventure|supermoto|catalog|accessories|phu kien|xe nao)\b/i,
+      /\b(price|gia ban|gia xe|hoi gia|bao nhieu|cost|stock|ton kho|con hang|available|spec|thong so|engine|phan khoi|cc|dual[- ]?sport|enduro|motocross|adventure|supermoto|catalog|accessories|phu kien|xe nao)\b/i,
     ],
   },
 ]);
 
+const GENERAL_PURCHASE_PATTERNS = Object.freeze([
+  /\b(toi muon mua|minh muon mua|muon mua|can mua|tim mua|mua xe|can tu van|tu van giup|tu van cho|tu van xe|chon xe|gioi thieu xe|shop ban gi|co nhung xe|xem xe|dat xe)\b/i,
+  /\b(want to buy|looking to buy|buy a (bike|motorcycle)|need advice|help me choose|recommend (a |me )?(bike|motorcycle)|what bikes do you (sell|have)|looking for a (bike|motorcycle)|shopping for)\b/i,
+]);
+
+const PURE_GREETING_REGEX =
+  /^(alo+|a lo|xin chao|chao|chao shop|chao ad|chao admin|chao ban|hello|hi|hey|hi there|good morning|good afternoon|good evening|shop oi|ad oi|co ai khong|co ai o day khong)(\s+(shop|ad|admin|ban|dirtfit|there|everyone|moi nguoi))?$/i;
+
+function isPureGreetingMessage(foldedMessage) {
+  const stripped = String(foldedMessage ?? '')
+    .replace(/[!?.~,;:'"()[\]]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!stripped) {
+    return false;
+  }
+
+  const tokenCount = stripped.split(' ').length;
+  if (tokenCount > 6) {
+    return false;
+  }
+
+  return PURE_GREETING_REGEX.test(stripped);
+}
+
 /**
- * Classify user message into one of 8 structured DirtFit chatbot intents and extract entities.
+ * Classify user message into one of DirtFit's structured chatbot intents and extract entities.
  * Pure JS, zero network calls (< 1ms).
+ * Priority: explicit dimensions -> specialized keyword rules -> bike model mentions
+ * -> general purchase consultation -> pure short greeting -> OUT_OF_SCOPE.
  * @param {string} message
  * @param {Array<{ slug: string, name: string }>} [catalogBikes]
  * @returns {{
@@ -252,6 +320,24 @@ export function classifyChatIntent(message, catalogBikes = []) {
     return {
       intent: CHAT_INTENTS.CATALOG_PRICING,
       preferredDocSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+      entities,
+      mentionedSlugs,
+    };
+  }
+
+  if (GENERAL_PURCHASE_PATTERNS.some((re) => re.test(folded))) {
+    return {
+      intent: CHAT_INTENTS.GENERAL_PURCHASE,
+      preferredDocSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+      entities,
+      mentionedSlugs,
+    };
+  }
+
+  if (isPureGreetingMessage(folded)) {
+    return {
+      intent: CHAT_INTENTS.GREETING,
+      preferredDocSlug: null,
       entities,
       mentionedSlugs,
     };

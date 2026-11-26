@@ -13,6 +13,7 @@ import {
 import {
   classifyChatIntent,
   extractRiderEntities,
+  resolveEffectiveLocale,
 } from '../../src/modules/chatbot/intent-router.js';
 
 const MOCK_BIKES = [
@@ -145,6 +146,31 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     expect(classifyChatIntent('Explain quantum computing history', MOCK_BIKES).intent).toBe(
       CHAT_INTENTS.OUT_OF_SCOPE
     );
+    expect(classifyChatIntent('alo', MOCK_BIKES).intent).toBe(CHAT_INTENTS.GREETING);
+    expect(classifyChatIntent('Xin chào shop!', MOCK_BIKES).intent).toBe(CHAT_INTENTS.GREETING);
+    expect(classifyChatIntent('Hello!', MOCK_BIKES).intent).toBe(CHAT_INTENTS.GREETING);
+    expect(classifyChatIntent('tôi muốn mua', MOCK_BIKES).intent).toBe(
+      CHAT_INTENTS.GENERAL_PURCHASE
+    );
+    expect(classifyChatIntent('I want to buy a bike', MOCK_BIKES).intent).toBe(
+      CHAT_INTENTS.GENERAL_PURCHASE
+    );
+    expect(classifyChatIntent('Alo cho mình hỏi giá Honda CRF300L', MOCK_BIKES).intent).toBe(
+      CHAT_INTENTS.CATALOG_PRICING
+    );
+    expect(classifyChatIntent('Alo, cao 1m65 60kg nên đi xe nào?', MOCK_BIKES).intent).toBe(
+      CHAT_INTENTS.RIDER_FIT_ADVICE
+    );
+    expect(classifyChatIntent('Alo viết code Python giúp mình', MOCK_BIKES).intent).toBe(
+      CHAT_INTENTS.OUT_OF_SCOPE
+    );
+
+    expect(resolveEffectiveLocale('alo', 'en')).toBe('vi');
+    expect(resolveEffectiveLocale('tôi muốn mua', 'en')).toBe('vi');
+    expect(resolveEffectiveLocale('gia xe bao nhieu', 'en')).toBe('vi');
+    expect(resolveEffectiveLocale('How do deposits work?', 'vi')).toBe('en');
+    expect(resolveEffectiveLocale('Honda CRF300L', 'en')).toBe('en');
+    expect(resolveEffectiveLocale('Honda CRF300L', 'vi')).toBe('vi');
   });
 
   it('produces exact numerical parity with @dirtfit/ergonomics-engine evaluateBikeFit()', () => {
@@ -234,7 +260,17 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
       model: 'gemini-2.5-flash',
       fallbackAdapter,
       logger: { warn: warnMock },
-      fetchImpl: async () => new Response('quota exceeded', { status: 429 }),
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 429,
+              status: 'RESOURCE_EXHAUSTED',
+              message: 'Quota exceeded for key AIzaLeakedDummySecret123456',
+            },
+          }),
+          { status: 429, headers: { 'Content-Type': 'application/json' } }
+        ),
     });
 
     const fallbackRes = await rateLimitedAdapter.generate(groundedCtx);
@@ -242,5 +278,31 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     expect(fallbackRes.degraded).toBe(true);
     expect(fallbackRes.content).toContain('15 minutes');
     expect(warnMock).toHaveBeenCalledTimes(1);
+    const [warnPayload] = warnMock.mock.calls[0];
+    expect(warnPayload.event).toBe('chatbot_gemini_fallback');
+    expect(warnPayload.statusCode).toBe(429);
+    expect(warnPayload.errorCode).toBe('RESOURCE_EXHAUSTED');
+    expect(warnPayload.attempts).toBe(1);
+    expect(typeof warnPayload.latencyMs).toBe('number');
+    expect(JSON.stringify(warnPayload)).not.toContain('AIzaLeakedDummySecret123456');
+    expect(JSON.stringify(warnPayload)).not.toContain('AIzaTestSecretKeyHeaderOnly');
+
+    // Deterministic GREETING fast-path skips Gemini network calls entirely
+    const greetingFetchMock = vi.fn();
+    const fastGreetingAdapter = new GeminiChatAdapter({
+      apiKey: 'AIzaTestSecretKeyHeaderOnly',
+      model: 'gemini-2.5-flash',
+      fallbackAdapter,
+      fetchImpl: greetingFetchMock,
+    });
+    const greetingRes = await fastGreetingAdapter.generate({
+      ...groundedCtx,
+      intent: CHAT_INTENTS.GREETING,
+      locale: 'vi',
+    });
+    expect(greetingFetchMock).not.toHaveBeenCalled();
+    expect(greetingRes.provider).toBe('grounded-fallback');
+    expect(greetingRes.degraded).toBe(false);
+    expect(greetingRes.content).toContain('DirtFit Commerce');
   });
 });

@@ -5,10 +5,10 @@ import { AlertTriangle, ArrowLeft, ArrowRight, ImagePlus, Star, Trash2 } from 'l
 import { apiRequest } from '@/lib/api-client';
 import { localizeApiError } from '@/lib/i18n/translate';
 import {
+  inspectImageFileForUpload,
   isPlaceholderMediaUrl,
   readBrowserImageDimensions,
   resolveClientMediaUrl,
-  validateImageFileForUpload,
 } from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
@@ -64,6 +64,7 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
   );
 
   const mapValidationError = (errorCode) => {
+    if (errorCode === 'UNSUPPORTED_BINARY_FORMAT') return t('media.unsupportedBinaryFormat');
     if (errorCode === 'INVALID_TYPE') return t('media.invalidFileType');
     if (errorCode === 'FILE_TOO_LARGE') return t('media.fileTooLarge');
     return t('media.emptyFile');
@@ -73,13 +74,15 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0 || !isAdmin) return;
 
+    const inspectedItems = [];
     for (const file of files) {
-      const check = validateImageFileForUpload(file);
+      const check = await inspectImageFileForUpload(file);
       if (!check.valid) {
         setErrorMessage(`${file.name}: ${mapValidationError(check.errorCode)}`);
         e.target.value = '';
         return;
       }
+      inspectedItems.push({ file, check });
     }
 
     setBusyAction(true);
@@ -90,14 +93,24 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
       const hasLiveCoverAlready = commercialPhotos.some(
         (m) => m.isPrimary && !isPlaceholderMediaUrl(m.url)
       );
+      const normalizedNotes = [];
 
-      for (let idx = 0; idx < files.length; idx += 1) {
-        const file = files[idx];
-        const fileCheck = validateImageFileForUpload(file);
+      for (let idx = 0; idx < inspectedItems.length; idx += 1) {
+        const { file, check: fileCheck } = inspectedItems[idx];
         const dims = await readBrowserImageDimensions(file);
         const isFirstLiveCover = !hasLiveCoverAlready && idx === 0;
         const targetMediaType = isFirstLiveCover ? 'HERO' : 'GALLERY';
-        const labelPrefix = files.length > 1 ? `[${idx + 1}/${files.length}] ` : '';
+        const labelPrefix =
+          inspectedItems.length > 1 ? `[${idx + 1}/${inspectedItems.length}] ` : '';
+
+        if (fileCheck.mimeCorrected) {
+          normalizedNotes.push(
+            t('media.mimeAutoNormalized', {
+              detected: fileCheck.mimeType,
+              declared: fileCheck.declaredMime || file.name,
+            })
+          );
+        }
 
         setUploadStepText(`${labelPrefix}${t('media.stepPresign')}`);
         const presign = await apiRequest(`/api/v1/admin/bikes/${bike.id}/media/presign`, {
@@ -106,7 +119,7 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
             mediaType: targetMediaType,
             mimeType: fileCheck.mimeType,
             sizeBytes: file.size,
-            originalFileName: file.name.slice(0, 180),
+            originalFileName: fileCheck.normalizedFileName,
           },
         });
 
@@ -114,7 +127,7 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
         const putRes = await fetch(presign.uploadUrl, {
           method: presign.method || 'PUT',
           headers: {
-            'content-type': fileCheck.mimeType,
+            'Content-Type': fileCheck.mimeType,
           },
           body: file,
         });
@@ -149,7 +162,10 @@ export default function BikePhotoManager({ bike, isAdmin, onBikeUpdated }) {
       }
 
       setUploadStepText('');
-      setStatusMessage(`${t('media.uploadSuccess', { count: files.length })}`);
+      const baseSuccess = t('media.uploadSuccess', { count: inspectedItems.length });
+      setStatusMessage(
+        normalizedNotes.length > 0 ? `${baseSuccess} (${normalizedNotes[0]})` : baseSuccess
+      );
       await onBikeUpdated();
     } catch (err) {
       setUploadStepText('');

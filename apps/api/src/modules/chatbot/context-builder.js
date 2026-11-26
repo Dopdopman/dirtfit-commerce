@@ -193,6 +193,32 @@ async function loadLiveCatalogBikes(app) {
   });
 }
 
+function selectRepresentativeBikes(liveBikes, maxCount = 4) {
+  if (!Array.isArray(liveBikes) || liveBikes.length === 0) {
+    return [];
+  }
+  const picked = [];
+  const seenCategories = new Set();
+  for (const bike of liveBikes) {
+    if (!seenCategories.has(bike.category)) {
+      seenCategories.add(bike.category);
+      picked.push(bike);
+      if (picked.length >= maxCount) {
+        return picked;
+      }
+    }
+  }
+  for (const bike of liveBikes) {
+    if (!picked.some((p) => p.id === bike.id)) {
+      picked.push(bike);
+      if (picked.length >= maxCount) {
+        break;
+      }
+    }
+  }
+  return picked;
+}
+
 /**
  * Resolve relevant knowledge base chunks and grounded policy citations without hallucinating URLs.
  * @param {string} message
@@ -202,7 +228,7 @@ async function loadLiveCatalogBikes(app) {
  * @returns {Array<object>}
  */
 function retrieveGroundedPolicyChunks(message, locale, intent, preferredDocSlug) {
-  if (intent === CHAT_INTENTS.OUT_OF_SCOPE) {
+  if (intent === CHAT_INTENTS.OUT_OF_SCOPE || intent === CHAT_INTENTS.GREETING) {
     return [];
   }
 
@@ -407,13 +433,17 @@ export async function buildGroundedChatContext({
     : [];
 
   let matchedCatalogBikes = [];
-  if (mentionedSlugs.length > 0) {
-    const slugSet = new Set(mentionedSlugs);
-    matchedCatalogBikes = liveBikes.filter((b) => slugSet.has(b.slug));
-  } else if (entities.category) {
-    matchedCatalogBikes = liveBikes.filter((b) => b.category === entities.category).slice(0, 4);
-  } else if (intent === CHAT_INTENTS.CATALOG_PRICING) {
-    matchedCatalogBikes = liveBikes.slice(0, 5);
+  if (intent !== CHAT_INTENTS.GREETING) {
+    if (mentionedSlugs.length > 0) {
+      const slugSet = new Set(mentionedSlugs);
+      matchedCatalogBikes = liveBikes.filter((b) => slugSet.has(b.slug));
+    } else if (entities.category) {
+      matchedCatalogBikes = liveBikes.filter((b) => b.category === entities.category).slice(0, 4);
+    } else if (intent === CHAT_INTENTS.CATALOG_PRICING) {
+      matchedCatalogBikes = liveBikes.slice(0, 5);
+    } else if (intent === CHAT_INTENTS.GENERAL_PURCHASE) {
+      matchedCatalogBikes = selectRepresentativeBikes(liveBikes, 4);
+    }
   }
 
   // Scoped recent orders for ORDER_STATUS_HELP (strictly anti-IDOR, zero PII sent to LLM)

@@ -3,19 +3,20 @@
  * production payment gating, and Next.js SSR integration with live API data.
  *
  * Usage:
- *   node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 [--expect-prod]
+ *   node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 [--expect-prod] [--expected-commit <sha>]
  */
 
 /**
  * Parse CLI flag pairs (--key value or boolean --flag).
  * @param {Array<string>} argv
- * @returns {{ apiUrl: string, webUrl: string, expectProd: boolean }}
+ * @returns {{ apiUrl: string, webUrl: string, expectProd: boolean, expectedCommit: string|null }}
  */
 function parseArgs(argv) {
   const result = {
     apiUrl: process.env.API_BASE_URL || 'http://127.0.0.1:4000',
     webUrl: process.env.WEB_BASE_URL || 'http://127.0.0.1:3000',
     expectProd: false,
+    expectedCommit: null,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -26,6 +27,9 @@ function parseArgs(argv) {
     } else if (arg === '--web-url' && argv[i + 1]) {
       result.webUrl = argv[i + 1];
       i += 1;
+    } else if (arg === '--expected-commit' && argv[i + 1]) {
+      result.expectedCommit = argv[i + 1].trim() || null;
+      i += 1;
     } else if (arg === '--expect-prod') {
       result.expectProd = true;
     }
@@ -35,6 +39,7 @@ function parseArgs(argv) {
     apiUrl: result.apiUrl.replace(/\/+$/, ''),
     webUrl: result.webUrl.replace(/\/+$/, ''),
     expectProd: result.expectProd,
+    expectedCommit: result.expectedCommit,
   };
 }
 
@@ -50,8 +55,8 @@ function assert(condition, message) {
 }
 
 async function main() {
-  const { apiUrl, webUrl, expectProd } = parseArgs(process.argv.slice(2));
-  console.log(JSON.stringify({ phase: 'smoke_start', apiUrl, webUrl, expectProd }));
+  const { apiUrl, webUrl, expectProd, expectedCommit } = parseArgs(process.argv.slice(2));
+  console.log(JSON.stringify({ phase: 'smoke_start', apiUrl, webUrl, expectProd, expectedCommit }));
 
   // 1. API Liveness & Readiness (Postgres + Redis)
   const [liveRes, readyRes] = await Promise.all([
@@ -64,6 +69,12 @@ async function main() {
   assert(readyJson.status === 'ready', `/health/ready status=${readyJson.status}`);
   assert(readyJson.checks?.postgres === 'ok', 'Postgres health check must be ok');
   assert(readyJson.checks?.redis === 'ok', 'Redis health check must be ok');
+  if (expectedCommit) {
+    assert(
+      readyJson.commit === expectedCommit,
+      `/health/ready commit mismatch: expected ${expectedCommit}, got ${readyJson.commit}`
+    );
+  }
 
   // 2. Live Catalog API (BigInt -> JS safe Number VND)
   const [bikesRes, accessoriesRes] = await Promise.all([
@@ -216,6 +227,7 @@ async function main() {
         availableQty: firstBike.availableQty,
       },
       chatbotCitationsCount: assistantMsg.citations.length,
+      expectedCommitMatched: Boolean(expectedCommit),
       mediaFieldsVerified: true,
       mockPaymentBlocked404: expectProd,
       mockOAuthBlocked404: expectProd,

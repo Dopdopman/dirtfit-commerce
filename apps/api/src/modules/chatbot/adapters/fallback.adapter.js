@@ -177,6 +177,60 @@ function formatOrderStatusHelp(groundedContext) {
   );
 }
 
+function formatGreetingResponse(locale) {
+  if (locale === 'vi') {
+    return (
+      'Chào bạn! Tôi là **Trợ lý Kỹ thuật DirtFit Commerce**. Tôi có thể hỗ trợ bạn ngay:\n\n' +
+      '- **Tư vấn chọn xe theo vóc dáng (Rider Fit 2D):** Nhập chiều cao & cân nặng (ví dụ: *"Cao 1m68 nặng 65kg đi xe nào?"*) để Engine tính độ lún phuộc và mức chống chân thực tế.\n' +
+      '- **Báo giá, tồn kho & phụ kiện hạ yên:** Hỏi trực tiếp tên xe (KTM, Honda CRF, Yamaha WR/Ténéré, Kawasaki KLX, Suzuki DR-Z) hoặc nhu cầu mua xe.\n' +
+      '- **Đặt cọc PayOS VietQR, luật COD, bảo hành & lịch lái thử:** Tại 3 showroom Hà Nội, Đà Nẵng và TP.HCM.'
+    );
+  }
+
+  return (
+    'Hello! I am the **DirtFit Commerce** Technical Assistant. I can help you right away with:\n\n' +
+    '- **2D Rider Fit Sizing:** Share your height & weight (e.g., *"I\'m 168cm 65kg, which bike fits me?"*) for real suspension sag and foot-reach scoring.\n' +
+    '- **Live Bike Pricing, Stock & Lowering Kits:** Ask about any off-road/dual-sport/adventure model or tell me what type of bike you want to buy.\n' +
+    '- **Deposits, COD Rules, Warranty & Test Rides:** PayOS VietQR 15-minute holds and showroom bookings in Hanoi, Da Nang, and HCMC.'
+  );
+}
+
+function formatGeneralPurchaseResponse(groundedContext) {
+  const { locale, matchedCatalogBikes, liveBikes } = groundedContext;
+  const isVi = locale === 'vi';
+  const bikes = matchedCatalogBikes.length > 0 ? matchedCatalogBikes : liveBikes.slice(0, 4);
+
+  const catalogLines = bikes.map((bike) => {
+    const seat = bike.geometrySpec?.unladenSeatHeightMm ?? 'N/A';
+    if (isVi) {
+      return `- **${bike.name}** (${bike.category} · ${bike.engineCc}cc) — Giá: **${formatMoney(bike.priceVnd, 'vi')}** | Yên: \`${seat} mm\` | Còn **${bike.availableQty}** xe`;
+    }
+    return `- **${bike.name}** (${bike.category} · ${bike.engineCc}cc) — Price: **${formatMoney(bike.priceVnd, 'en')}** | Seat: \`${seat} mm\` | **${bike.availableQty}** available`;
+  });
+
+  if (isVi) {
+    const body =
+      catalogLines.length > 0
+        ? `\n\n${catalogLines.join('\n')}`
+        : '\n\nHiện danh mục xe đang được cập nhật trực tiếp trên trang **Xe địa hình** (`/bikes`).';
+    return (
+      'Rất vui được tư vấn chọn xe phù hợp cho bạn tại **DirtFit Commerce**! Một số mẫu xe tiêu biểu theo từng phân khúc hiện có:' +
+      body +
+      '\n\nĐể tôi tính chính xác mức **chống chân & Rider Sag** qua Engine 2D, bạn vui lòng cho biết thêm **chiều cao (cm)**, **cân nặng (kg)** và **địa hình chạy chính** (đi phố/tour nhẹ Dual-Sport, off-road Enduro/Motocross hay đường dài Adventure) nhé!'
+    );
+  }
+
+  const body =
+    catalogLines.length > 0
+      ? `\n\n${catalogLines.join('\n')}`
+      : '\n\nYou can browse our latest stock on the **Motorcycles** page (`/bikes`).';
+  return (
+    'I would be glad to help you choose the right motorcycle at **DirtFit Commerce**! Here are representative live models across our segments:' +
+    body +
+    '\n\nTo calculate your exact **2D foot contact and Rider Sag** with `@dirtfit/ergonomics-engine`, please share your **height (cm)**, **weight (kg)**, and **primary terrain** (Dual-Sport street/trail, Enduro/MX off-road, or Adventure touring).'
+  );
+}
+
 /**
  * Deterministic Zero-Key Grounded Fallback Adapter.
  * Generates strictly grounded EN/VI responses from `@dirtfit/knowledge`, `CatalogCache`, and `@dirtfit/ergonomics-engine`.
@@ -190,6 +244,12 @@ export class GroundedFallbackAdapter {
     let content;
 
     switch (groundedContext.intent) {
+      case CHAT_INTENTS.GREETING:
+        content = formatGreetingResponse(groundedContext.locale);
+        break;
+      case CHAT_INTENTS.GENERAL_PURCHASE:
+        content = formatGeneralPurchaseResponse(groundedContext);
+        break;
       case CHAT_INTENTS.POLICY_ORDERING:
       case CHAT_INTENTS.POLICY_TERMS:
       case CHAT_INTENTS.POLICY_WARRANTY:

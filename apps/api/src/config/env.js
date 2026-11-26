@@ -22,6 +22,8 @@ const EnvSchema = z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
     SWAGGER_ENABLED: BooleanStringSchema.default(true),
+    RENDER_GIT_COMMIT: z.string().trim().min(7).max(64).optional(),
+    GIT_COMMIT_SHA: z.string().trim().min(7).max(64).optional(),
 
     DATABASE_URL: z.string().min(1),
     DIRECT_URL: z.string().min(1).optional(),
@@ -164,6 +166,9 @@ export function loadEnv(overrides = {}) {
     process.loadEnvFile(DEFAULT_ENV_PATH);
   }
 
+  const normalizeOptionalString = (val) =>
+    typeof val === 'string' && val.trim().length > 0 ? val.trim() : undefined;
+
   const rawSource = { ...process.env, ...overrides };
   const candidate = {
     NODE_ENV: rawSource.NODE_ENV,
@@ -173,6 +178,8 @@ export function loadEnv(overrides = {}) {
     API_URL: rawSource.API_URL,
     LOG_LEVEL: rawSource.LOG_LEVEL,
     SWAGGER_ENABLED: rawSource.SWAGGER_ENABLED,
+    RENDER_GIT_COMMIT: normalizeOptionalString(rawSource.RENDER_GIT_COMMIT),
+    GIT_COMMIT_SHA: normalizeOptionalString(rawSource.GIT_COMMIT_SHA),
     DATABASE_URL: rawSource.DATABASE_URL,
     DIRECT_URL: rawSource.DIRECT_URL,
     REDIS_URL: rawSource.REDIS_URL,

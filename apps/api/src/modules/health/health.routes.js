@@ -51,8 +51,11 @@ export default async function healthRoutes(app) {
       }
 
       const isReady = checks.postgres === 'ok' && checks.redis === 'ok';
+      const commit = app.env?.RENDER_GIT_COMMIT || app.env?.GIT_COMMIT_SHA || null;
+
       return reply.code(isReady ? 200 : 503).send({
         status: isReady ? 'ready' : 'degraded',
+        commit,
         checks,
         timestamp: new Date().toISOString(),
       });

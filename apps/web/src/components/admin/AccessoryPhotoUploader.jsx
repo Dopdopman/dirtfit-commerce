@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import { ImagePlus, Trash2, Wrench, X } from 'lucide-react';
 import { apiRequest } from '@/lib/api-client';
 import { localizeApiError } from '@/lib/i18n/translate';
-import { resolveClientMediaUrl, validateImageFileForUpload } from '@/lib/media-helpers';
+import { inspectImageFileForUpload, resolveClientMediaUrl } from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Execute 3-step R2/Local Presign -> PUT -> 4KB Magic Bytes Confirm upload for an accessory photo.
- * Shared across Create (post-create auto upload) and Edit (instant replace) workflows.
+ * Uses real sniffed binary MIME consistently across presign, PUT Content-Type, and confirm.
  * @param {string} accessoryId
  * @param {File} file
  * @param {object} [options]
@@ -17,7 +17,7 @@ import { useI18n } from '@/providers/I18nProvider';
  * @returns {Promise<{ accessory: object, verifiedMime: string }>}
  */
 export async function uploadAccessoryPhotoFile(accessoryId, file, { onStep } = {}) {
-  const check = validateImageFileForUpload(file);
+  const check = await inspectImageFileForUpload(file);
   if (!check.valid) {
     throw new Error(check.errorCode);
   }
@@ -28,7 +28,7 @@ export async function uploadAccessoryPhotoFile(accessoryId, file, { onStep } = {
     body: {
       mimeType: check.mimeType,
       sizeBytes: file.size,
-      originalFileName: file.name.slice(0, 180),
+      originalFileName: check.normalizedFileName,
     },
   });
 
@@ -36,7 +36,7 @@ export async function uploadAccessoryPhotoFile(accessoryId, file, { onStep } = {
   const putRes = await fetch(presign.uploadUrl, {
     method: presign.method || 'PUT',
     headers: {
-      'content-type': check.mimeType,
+      'Content-Type': check.mimeType,
     },
     body: file,
   });
@@ -79,6 +79,7 @@ export default function AccessoryPhotoUploader({
   const { locale, t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [stepText, setStepText] = useState('');
+  const [infoNotice, setInfoNotice] = useState('');
   const [localError, setLocalError] = useState('');
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState('');
   const [remoteImgBroken, setRemoteImgBroken] = useState(false);
@@ -102,6 +103,7 @@ export default function AccessoryPhotoUploader({
   }, [pendingFile]);
 
   const mapValidationMessage = (errorCode) => {
+    if (errorCode === 'UNSUPPORTED_BINARY_FORMAT') return t('media.unsupportedBinaryFormat');
     if (errorCode === 'INVALID_TYPE') return t('media.invalidFileType');
     if (errorCode === 'FILE_TOO_LARGE') return t('media.fileTooLarge');
     return t('media.emptyFile');
@@ -112,13 +114,22 @@ export default function AccessoryPhotoUploader({
     e.target.value = '';
     if (!file || !isAdmin) return;
 
-    const check = validateImageFileForUpload(file);
+    const check = await inspectImageFileForUpload(file);
     if (!check.valid) {
+      setInfoNotice('');
       setLocalError(mapValidationMessage(check.errorCode));
       return;
     }
 
     setLocalError('');
+    setInfoNotice(
+      check.mimeCorrected
+        ? t('media.mimeAutoNormalized', {
+            detected: check.mimeType,
+            declared: check.declaredMime || file.name,
+          })
+        : ''
+    );
 
     if (!accessory?.id) {
       onPendingFileChange(file);
@@ -263,6 +274,7 @@ export default function AccessoryPhotoUploader({
             </p>
           )}
 
+          {infoNotice && <p className="font-mono text-[11px] text-ink-secondary">{infoNotice}</p>}
           {displayStep && (
             <p className="font-mono text-[11px] font-semibold text-signal">{displayStep}</p>
           )}

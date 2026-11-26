@@ -958,6 +958,9 @@ export const EN_DICT = Object.freeze({
     stepUpload: '2/3 Uploading binary image...',
     stepConfirm: '3/3 Verifying 4KB Magic Bytes...',
     invalidFileType: 'Unsupported image format. Use JPEG, PNG, or WebP.',
+    unsupportedBinaryFormat:
+      'File binary content is not a valid JPEG, PNG, or WebP image (AVIF, GIF, SVG, and renamed files are not supported).',
+    mimeAutoNormalized: 'Auto-detected actual format {detected} (original extension: {declared}).',
     fileTooLarge: 'Image exceeds the 5MB maximum file size.',
     emptyFile: 'Selected file is empty.',
   },

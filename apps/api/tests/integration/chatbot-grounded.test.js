@@ -416,4 +416,65 @@ describe('Phase 11/12 AI Support Chatbot Grounding, Security, Merge & Metrics (S
       await rlServer.close();
     }
   });
+
+  it('auto-detects Vietnamese messages on EN UI, handles GREETING & GENERAL_PURCHASE cleanly, blocks off-topic, and exposes /health/ready commit', async () => {
+    const greetRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'alo', locale: 'en' });
+    expect(greetRes.status).toBe(201);
+    createdSessionIds.push(greetRes.body.data.sessionId);
+    expect(greetRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.GREETING);
+    expect(greetRes.body.data.assistantMessage.content).toContain('Chào bạn');
+
+    const buyRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'tôi muốn mua', locale: 'en' });
+    expect(buyRes.status).toBe(201);
+    expect(buyRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.GENERAL_PURCHASE);
+    expect(buyRes.body.data.assistantMessage.content).toContain('chiều cao');
+    expect(
+      buyRes.body.data.assistantMessage.citations.some((c) => c.url.startsWith('/bikes/'))
+    ).toBe(true);
+
+    const ktmPriceRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'Alo cho mình hỏi giá KTM 350', locale: 'en' });
+    expect(ktmPriceRes.status).toBe(201);
+    expect(ktmPriceRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmPriceRes.body.data.assistantMessage.content).toContain('KTM 350 EXC-F');
+
+    const offTopicRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({ message: 'Alo viết code Python', locale: 'en' });
+    expect(offTopicRes.status).toBe(201);
+    expect(offTopicRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.OUT_OF_SCOPE);
+    expect(offTopicRes.body.data.assistantMessage.content).toContain('chỉ hỗ trợ');
+
+    // Verify /health/ready commit field with RENDER_GIT_COMMIT unset and configured
+    const defaultHealthRes = await request.get('/health/ready');
+    expect(defaultHealthRes.status).toBe(200);
+    expect(defaultHealthRes.body.status).toBe('ready');
+    expect(defaultHealthRes.body.commit).toBeNull();
+
+    const commitSha = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b';
+    const commitServer = await startTestServer({
+      envOverrides: {
+        NODE_ENV: 'test',
+        RENDER_GIT_COMMIT: commitSha,
+      },
+      rateLimitNamespace: `df:rl:healthcommit:${runId}:`,
+    });
+    try {
+      const commitHealthRes = await commitServer.request.get('/health/ready');
+      expect(commitHealthRes.status).toBe(200);
+      expect(commitHealthRes.body.status).toBe('ready');
+      expect(commitHealthRes.body.commit).toBe(commitSha);
+    } finally {
+      await commitServer.close();
+    }
+  });
 });

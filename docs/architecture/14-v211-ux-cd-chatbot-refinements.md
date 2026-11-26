@@ -404,12 +404,12 @@ Không phát sinh file thừa; phạm vi khoanh gọn vào đúng 15 file hiện
 
 ### 6.2. Definition of Done (DoD) trước khi Release `v2.1.1`
 
-- [ ] `pnpm --filter @dirtfit/api run db:validate && pnpm --filter @dirtfit/api run db:migrate:deploy && pnpm --filter @dirtfit/api run db:generate` thoát mã `0`.
-- [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm audit --prod --audit-level=high` thoát mã `0`.
-- [ ] `pnpm test:unit` pass 100% trên cả 5 packages (`< 5s`).
-- [ ] `$env:ENABLE_MOCK_OAUTH='true'; $env:GOOGLE_OAUTH_ENABLED='true'; pnpm test:integration` pass 100%.
-- [ ] `pnpm --filter @dirtfit/web build && pnpm test:system` pass **7/7** Playwright specs.
-- [ ] `docker compose -f docker-compose.prod.yml up -d --build --wait` + `node scripts/smoke-stack.mjs --expect-prod` trả `"status": "PASSED"` kèm trường `health.commit`.
+- [x] `pnpm --filter @dirtfit/api run db:validate && pnpm --filter @dirtfit/api run db:migrate:deploy && pnpm --filter @dirtfit/api run db:generate` thoát mã `0`.
+- [x] `pnpm check:pure-js && pnpm lint && pnpm format:check && pnpm audit --prod --audit-level=high` thoát mã `0`.
+- [x] `pnpm test:unit` pass 100% trên cả 5 packages (`< 5s`).
+- [x] `$env:ENABLE_MOCK_OAUTH='true'; $env:GOOGLE_OAUTH_ENABLED='true'; pnpm test:integration` pass 100%.
+- [x] `pnpm --filter @dirtfit/web build && pnpm test:system` pass **7/7** Playwright specs.
+- [x] `docker compose -f docker-compose.prod.yml up -d --build --wait` + `node scripts/smoke-stack.mjs --expect-prod` trả `"status": "PASSED"` kèm trường `health.commit`.
 
 ---
 

@@ -14,6 +14,12 @@ export const ALLOWED_UPLOAD_IMAGE_MIMES = Object.freeze(['image/jpeg', 'image/pn
 
 export const MAX_UPLOAD_IMAGE_BYTES = 5 * 1024 * 1024;
 
+const MIME_TO_EXTENSION = Object.freeze({
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+});
+
 /**
  * Normalize a verified live media URL for browser `<img src>`, expanding API-relative paths
  * (`/api/v1/media/local/...`) against the configured public API origin.
@@ -134,7 +140,148 @@ export function resolveItemProductUrl(item) {
 }
 
 /**
- * Validate a browser File before requesting an upload presign URL.
+ * Detect genuine raster image MIME type directly from leading binary magic bytes.
+ * Matches backend 4KB Magic Bytes rules 1:1 (JPEG, PNG, WebP only; minimum 12 bytes).
+ * @param {Uint8Array|ArrayBuffer|null|undefined} bytes
+ * @returns {'image/jpeg'|'image/png'|'image/webp'|null}
+ */
+export function detectImageMimeFromBytes(bytes) {
+  if (!bytes) {
+    return null;
+  }
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (view.length < 12) {
+    return null;
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    view[0] === 0x89 &&
+    view[1] === 0x50 &&
+    view[2] === 0x4e &&
+    view[3] === 0x47 &&
+    view[4] === 0x0d &&
+    view[5] === 0x0a &&
+    view[6] === 0x1a &&
+    view[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+
+  // JPEG: FF D8 FF
+  if (view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  // WebP: RIFF....WEBP (bytes 0..3 = 'RIFF', bytes 8..11 = 'WEBP')
+  if (
+    view[0] === 0x52 &&
+    view[1] === 0x49 &&
+    view[2] === 0x46 &&
+    view[3] === 0x46 &&
+    view[8] === 0x57 &&
+    view[9] === 0x45 &&
+    view[10] === 0x42 &&
+    view[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}
+
+/**
+ * Sniff up to the first 16 bytes of a browser File/Blob to determine actual binary image MIME type.
+ * Safe in modern browsers and Vitest/jsdom without loading the full image into memory.
+ * @param {File|Blob|null|undefined} file
+ * @returns {Promise<'image/jpeg'|'image/png'|'image/webp'|null>}
+ */
+export async function detectBrowserImageMime(file) {
+  if (!file || typeof file.slice !== 'function') {
+    return null;
+  }
+  const headBlob = file.slice(0, 16);
+  let arrayBuffer;
+  if (typeof headBlob.arrayBuffer === 'function') {
+    arrayBuffer = await headBlob.arrayBuffer();
+  } else if (typeof Response !== 'undefined') {
+    arrayBuffer = await new Response(headBlob).arrayBuffer();
+  } else {
+    return null;
+  }
+  return detectImageMimeFromBytes(new Uint8Array(arrayBuffer));
+}
+
+/**
+ * Rewrite filename extension to match the detected binary MIME type (clamped to <= 180 chars).
+ * @param {string|null|undefined} fileName
+ * @param {'image/jpeg'|'image/png'|'image/webp'} detectedMime
+ * @returns {string}
+ */
+export function normalizeFilenameExtension(fileName, detectedMime) {
+  const targetExt = MIME_TO_EXTENSION[detectedMime] || 'bin';
+  const raw =
+    typeof fileName === 'string' && fileName.trim() ? fileName.trim() : `image.${targetExt}`;
+  const lastDot = raw.lastIndexOf('.');
+  const baseName = lastDot > 0 ? raw.slice(0, lastDot) : raw;
+  const maxBaseLen = Math.max(1, 180 - targetExt.length - 1);
+  return `${baseName.slice(0, maxBaseLen)}.${targetExt}`;
+}
+
+/**
+ * Inspect a browser File before upload by checking size (<= 5MB) and sniffing its 16-byte header.
+ * Auto-normalizes mismatched extensions (e.g. CDN `.png` file containing WebP bytes) to the real
+ * binary MIME type so presign, R2 PUT Content-Type, and 4KB Magic Bytes confirm always agree.
+ * @param {File|Blob|null|undefined} file
+ * @returns {Promise<object>}
+ */
+export async function inspectImageFileForUpload(file) {
+  if (!file || typeof file.size !== 'number' || file.size <= 0) {
+    return { valid: false, errorCode: 'EMPTY_FILE' };
+  }
+
+  const declaredMime = typeof file.type === 'string' ? file.type.trim().toLowerCase() : '';
+
+  if (file.size > MAX_UPLOAD_IMAGE_BYTES) {
+    return { valid: false, errorCode: 'FILE_TOO_LARGE', declaredMime: declaredMime || null };
+  }
+
+  if (file.size < 12) {
+    return {
+      valid: false,
+      errorCode: 'UNSUPPORTED_BINARY_FORMAT',
+      declaredMime: declaredMime || null,
+    };
+  }
+
+  const detectedMime = await detectBrowserImageMime(file);
+  if (!detectedMime) {
+    return {
+      valid: false,
+      errorCode: 'UNSUPPORTED_BINARY_FORMAT',
+      declaredMime: declaredMime || null,
+    };
+  }
+
+  const mimeCorrected = Boolean(declaredMime && declaredMime !== detectedMime);
+  const normalizedFileName = normalizeFilenameExtension(
+    typeof file.name === 'string' ? file.name : '',
+    detectedMime
+  );
+
+  return {
+    valid: true,
+    mimeType: detectedMime,
+    declaredMime: declaredMime || null,
+    mimeCorrected,
+    sizeBytes: file.size,
+    normalizedFileName,
+  };
+}
+
+/**
+ * Synchronous lightweight check on declared File metadata (kept for backward compatibility).
+ * Upload components should prefer `inspectImageFileForUpload()` for real binary header sniffing.
  * @param {File|null|undefined} file
  * @returns {{ valid: true, mimeType: string, sizeBytes: number } | { valid: false, errorCode: 'EMPTY_FILE'|'INVALID_TYPE'|'FILE_TOO_LARGE' }}
  */

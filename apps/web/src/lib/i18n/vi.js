@@ -953,6 +953,10 @@ export const VI_DICT = Object.freeze({
     stepUpload: '2/3 Đang truyền dữ liệu ảnh...',
     stepConfirm: '3/3 Đang kiểm tra 4KB Magic Bytes...',
     invalidFileType: 'Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPEG, PNG hoặc WebP.',
+    unsupportedBinaryFormat:
+      'Nội dung nhị phân của tệp không phải ảnh JPEG, PNG hoặc WebP hợp lệ (không hỗ trợ AVIF, GIF, SVG hoặc tệp đổi đuôi).',
+    mimeAutoNormalized:
+      'Đã tự động chuẩn hóa định dạng thực tế là {detected} (đuôi gốc: {declared}).',
     fileTooLarge: 'Dung lượng ảnh vượt quá giới hạn tối đa 5MB.',
     emptyFile: 'File được chọn đang rỗng.',
   },
