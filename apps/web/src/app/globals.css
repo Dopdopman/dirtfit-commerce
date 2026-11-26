@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  --font-display: 'Plus Jakarta Sans';
+  --font-sans: 'Be Vietnam Pro';
+  --font-mono: 'JetBrains Mono';
   --bg-canvas: #f7f7f5;
   --bg-surface: #ffffff;
   --bg-blueprint: #efefe9;

@@ -1,31 +1,18 @@
-import { Be_Vietnam_Pro, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
+import '@fontsource/be-vietnam-pro/400.css';
+import '@fontsource/be-vietnam-pro/500.css';
+import '@fontsource/be-vietnam-pro/600.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
+import '@fontsource/jetbrains-mono/700.css';
+import '@fontsource/plus-jakarta-sans/600.css';
+import '@fontsource/plus-jakarta-sans/700.css';
+import '@fontsource/plus-jakarta-sans/800.css';
 import StorefrontShell from '@/components/layout/StorefrontShell';
 import { getServerLocale } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/translate';
 import AppProviders from '@/providers/AppProviders';
 import I18nProvider from '@/providers/I18nProvider';
 import './globals.css';
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['600', '700', '800'],
-  variable: '--font-display',
-  display: 'swap',
-});
-
-const beVietnamPro = Be_Vietnam_Pro({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const jetBrainsMono = JetBrains_Mono({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['500', '600', '700'],
-  variable: '--font-mono',
-  display: 'swap',
-});
 
 /**
  * Dynamic SSR metadata aligned with active `dirtfit_locale` cookie (default: 'en').
@@ -51,10 +38,7 @@ export default async function RootLayout({ children }) {
   const locale = await getServerLocale();
 
   return (
-    <html
-      lang={locale}
-      className={`${plusJakartaSans.variable} ${beVietnamPro.variable} ${jetBrainsMono.variable}`}
-    >
+    <html lang={locale}>
       <body className="flex min-h-screen flex-col bg-canvas text-ink">
         <I18nProvider initialLocale={locale}>
           <AppProviders>
