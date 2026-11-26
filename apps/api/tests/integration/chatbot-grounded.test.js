@@ -147,8 +147,15 @@ describe('Phase 11/12 AI Support Chatbot Grounding, Security, Merge & Metrics (S
     const assistant = res.body.data.assistantMessage;
     expect(assistant.intent).toBe(CHAT_INTENTS.RIDER_FIT_ADVICE);
     expect(assistant.recommendedBikes.length).toBeGreaterThan(0);
+    expect(assistant.citations.some((c) => c.url === '/policies/terms#ergonomics-disclaimer')).toBe(
+      true
+    );
+    expect(assistant.citations.some((c) => c.id === 'account-security')).toBe(false);
+    expect(assistant.citations.some((c) => c.id === 'privacy-data')).toBe(false);
 
     const topBike = assistant.recommendedBikes[0];
+    expect(topBike.cardMode).toBe('FIT');
+    expect(topBike.productUrl).toBe(`/bikes/${topBike.slug}`);
     expect(typeof topBike.effectiveSeatHeightMm).toBe('number');
     expect(typeof topBike.riderSagMm).toBe('number');
     expect(typeof topBike.priceVnd).toBe('number');
@@ -430,21 +437,51 @@ describe('Phase 11/12 AI Support Chatbot Grounding, Security, Merge & Metrics (S
     const buyRes = await request
       .post('/api/v1/chat/messages')
       .set('authorization', `Bearer ${customerToken}`)
-      .send({ message: 'tôi muốn mua', locale: 'en' });
+      .send({ message: 'tôi muốn mua xe', locale: 'en' });
     expect(buyRes.status).toBe(201);
-    expect(buyRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.GENERAL_PURCHASE);
-    expect(buyRes.body.data.assistantMessage.content).toContain('chiều cao');
+    const buyAssistant = buyRes.body.data.assistantMessage;
+    expect(buyAssistant.intent).toBe(CHAT_INTENTS.GENERAL_PURCHASE);
+    expect(buyAssistant.content).toContain('chiều cao');
+    expect(buyAssistant.content).toMatch(/\[[^\]]+\]\(\/bikes\/[a-z0-9-]+\)/);
+    expect(buyAssistant.recommendedBikes.length).toBeGreaterThan(0);
+    for (const card of buyAssistant.recommendedBikes) {
+      expect(card.cardMode).toBe('CATALOG');
+      expect(card.productUrl).toBe(`/bikes/${card.slug}`);
+      expect(typeof card.priceVnd).toBe('number');
+      expect(typeof card.availableQty).toBe('number');
+    }
     expect(
-      buyRes.body.data.assistantMessage.citations.some((c) => c.url.startsWith('/bikes/'))
-    ).toBe(true);
+      buyAssistant.citations.some(
+        (c) => c.id === 'privacy-data' || String(c.url).includes('privacy-data')
+      )
+    ).toBe(false);
+    expect(buyAssistant.citations.some((c) => c.url.startsWith('/bikes/'))).toBe(true);
 
     const ktmPriceRes = await request
       .post('/api/v1/chat/messages')
       .set('authorization', `Bearer ${customerToken}`)
       .send({ message: 'Alo cho mình hỏi giá KTM 350', locale: 'en' });
     expect(ktmPriceRes.status).toBe(201);
-    expect(ktmPriceRes.body.data.assistantMessage.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
-    expect(ktmPriceRes.body.data.assistantMessage.content).toContain('KTM 350 EXC-F');
+    const ktmAssistant = ktmPriceRes.body.data.assistantMessage;
+    expect(ktmAssistant.intent).toBe(CHAT_INTENTS.CATALOG_PRICING);
+    expect(ktmAssistant.content).toContain('[KTM 350 EXC-F](/bikes/ktm-350-exc-f)');
+    expect(ktmAssistant.recommendedBikes.some((b) => b.slug === 'ktm-350-exc-f')).toBe(true);
+    expect(ktmAssistant.recommendedBikes[0].cardMode).toBe('CATALOG');
+    expect(ktmAssistant.citations.some((c) => c.id === 'privacy-data')).toBe(false);
+
+    const mixedPolicyBuyRes = await request
+      .post('/api/v1/chat/messages')
+      .set('authorization', `Bearer ${customerToken}`)
+      .send({
+        message: 'Mua Honda CRF300L có được thanh toán COD hay đặt cọc không?',
+        locale: 'en',
+      });
+    expect(mixedPolicyBuyRes.status).toBe(201);
+    expect(
+      mixedPolicyBuyRes.body.data.assistantMessage.citations.some((c) =>
+        c.url.startsWith('/policies/ordering')
+      )
+    ).toBe(true);
 
     const offTopicRes = await request
       .post('/api/v1/chat/messages')

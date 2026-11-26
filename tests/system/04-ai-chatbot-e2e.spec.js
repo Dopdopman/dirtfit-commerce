@@ -42,7 +42,38 @@ test.describe('E2E-04: AI Support Chatbot Grounded Citations, Ergonomics Mini Ca
     await expect(page.locator('#simulator')).toContainText('165 cm');
     await expect(page.locator('#simulator')).toContainText('60 kg');
 
-    // 3. Reload page -> reopen chat -> persisted messages still present -> rate UP -> Reset
+    // 3. Reopen drawer -> ask "tôi muốn mua xe" (EN UI) -> verify inline bike link + CompactBikeCard & zero privacy-data noise -> click to navigate
+    await page.getByTestId('chat-widget-trigger').click();
+    await expect(drawer).toBeVisible();
+
+    await drawer.locator('input[type="text"]').fill('tôi muốn mua xe');
+    await drawer.locator('form button[type="submit"]').click();
+
+    const inlineBikeLink = drawer.locator('li a[href^="/bikes/"]').first();
+    await expect(inlineBikeLink).toBeVisible();
+    await expect(drawer).not.toContainText('[privacy-data]');
+
+    const compactCard = drawer.getByTestId('chat-compact-bike-card').first();
+    await expect(compactCard).toBeVisible();
+
+    const targetHref = await compactCard.getAttribute('href');
+    expect(targetHref).toMatch(/^\/bikes\/[a-z0-9-]+$/);
+
+    await compactCard.click();
+    await page.waitForURL(/\/bikes\/[a-z0-9-]+$/);
+    await expect(page.locator('h1')).toBeVisible();
+
+    // Also verify direct navigation from inline clickable bike link inside message body
+    await page.getByTestId('chat-widget-trigger').click();
+    await expect(drawer).toBeVisible();
+    const secondInlineLink = drawer.locator('li a[href^="/bikes/"]').nth(1);
+    await expect(secondInlineLink).toBeVisible();
+    const secondHref = await secondInlineLink.getAttribute('href');
+    await secondInlineLink.click();
+    await page.waitForURL(new RegExp(`${secondHref}$`));
+    await expect(page.locator('h1')).toBeVisible();
+
+    // 4. Reload page -> reopen chat -> persisted messages still present -> rate UP -> Reset
     await page.reload();
     await page.getByTestId('chat-widget-trigger').click();
     await expect(drawer).toContainText('How do bike deposits and COD rules work?');

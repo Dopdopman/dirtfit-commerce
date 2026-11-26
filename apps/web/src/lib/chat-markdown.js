@@ -1,8 +1,13 @@
-const ALLOWED_INTERNAL_PREFIXES = ['/policies/', '/bikes/', '/test-ride', '/compare', '/account'];
+const SAFE_INTERNAL_URL_REGEX =
+  /^\/(?:bikes|accessories|compare|test-ride|policies|cart|account)(?:\/[a-zA-Z0-9._-]+)*(?:\?[a-zA-Z0-9._=&%-]+)?(?:#[a-zA-Z0-9._-]+)?$/;
+
+const INLINE_TOKEN_REGEX =
+  /(\*\*\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)\*\*|\[\*\*([^\]\n]+)\*\*\]\(((?:[^()\s]|\([^()\s]*\))+)\)|\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)|\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\n]+\*)/g;
 
 /**
- * Verify that a citation or card URL strictly targets a safe internal Storefront route.
- * Rejects `javascript:`, `data:`, protocol-relative `//`, and arbitrary external origins.
+ * Verify that a citation, link, or card URL strictly targets a safe internal DirtFit Storefront route.
+ * Rejects `javascript:`, `data:`, protocol-relative `//`, backslash traversal, `%2e%2e`/`%2f`,
+ * arbitrary external origins, and `/admin` routes.
  * @param {unknown} rawUrl
  * @returns {boolean}
  */
@@ -11,39 +16,67 @@ export function isSafeInternalUrl(rawUrl) {
     return false;
   }
   const trimmed = rawUrl.trim();
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
+  if (!trimmed || trimmed.startsWith('//') || trimmed.includes('\\')) {
     return false;
   }
-  return ALLOWED_INTERNAL_PREFIXES.some(
-    (prefix) => trimmed === prefix || trimmed.startsWith(prefix)
-  );
+  if (/(?:^|\/)\.\.(?:\/|$)|%2e%2e|%2f|%5c/i.test(trimmed)) {
+    return false;
+  }
+  return SAFE_INTERNAL_URL_REGEX.test(trimmed);
 }
 
 /**
- * Parse inline bold (**text**) and inline code (`text`) without interpreting HTML tags.
- * Raw HTML such as `<script>` remains literal plain text so React safely escapes it.
+ * Parse inline bold (**text**), inline code (`text`), and internal Markdown links ([label](href))
+ * supporting `**[label](href)**`, `[**label**](href)`, and `[label](href)` without HTML injection.
+ * Any unsafe URL inside Markdown links is downgraded to safe plain/bold text.
  * @param {string} line
- * @returns {Array<{ type: 'text'|'bold'|'code', value: string }>}
+ * @returns {Array<{ type: 'text'|'bold'|'code'|'link', value?: string, label?: string, href?: string, bold?: boolean }>}
  */
 export function parseInlineRuns(line) {
   const input = String(line ?? '');
   const runs = [];
-  const tokenRegex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;
+  INLINE_TOKEN_REGEX.lastIndex = 0;
   let lastIndex = 0;
 
   let match;
-  while ((match = tokenRegex.exec(input)) !== null) {
+  while ((match = INLINE_TOKEN_REGEX.exec(input)) !== null) {
     if (match.index > lastIndex) {
       runs.push({ type: 'text', value: input.slice(lastIndex, match.index) });
     }
+
     const token = match[0];
-    if (token.startsWith('**') && token.endsWith('**')) {
+    if (match[2] !== undefined && match[3] !== undefined) {
+      const label = match[2];
+      const href = match[3].trim();
+      if (isSafeInternalUrl(href)) {
+        runs.push({ type: 'link', label, href, bold: true });
+      } else {
+        runs.push({ type: 'bold', value: label });
+      }
+    } else if (match[4] !== undefined && match[5] !== undefined) {
+      const label = match[4];
+      const href = match[5].trim();
+      if (isSafeInternalUrl(href)) {
+        runs.push({ type: 'link', label, href, bold: true });
+      } else {
+        runs.push({ type: 'bold', value: label });
+      }
+    } else if (match[6] !== undefined && match[7] !== undefined) {
+      const label = match[6];
+      const href = match[7].trim();
+      if (isSafeInternalUrl(href)) {
+        runs.push({ type: 'link', label, href, bold: false });
+      } else {
+        runs.push({ type: 'text', value: label });
+      }
+    } else if (token.startsWith('**') && token.endsWith('**')) {
       runs.push({ type: 'bold', value: token.slice(2, -2) });
     } else if (token.startsWith('`') && token.endsWith('`')) {
       runs.push({ type: 'code', value: token.slice(1, -1) });
     } else if (token.startsWith('*') && token.endsWith('*')) {
       runs.push({ type: 'bold', value: token.slice(1, -1) });
     }
+
     lastIndex = match.index + token.length;
   }
 

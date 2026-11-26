@@ -297,12 +297,12 @@ Không phát sinh migration DB, không thêm dependency bên ngoài (`package.js
 
 ### 7.2. Definition of Done (DoD) trước khi Release `v2.1.2`
 
-- [ ] **0 Prisma migration mới** (xác nhận `git diff apps/api/prisma/` rỗng, `pnpm --filter @dirtfit/api run db:validate` thoát mã `0`).
-- [ ] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
-- [ ] `pnpm test:unit` pass 100% trên cả 5 packages (`< 5s`), bao gồm toàn bộ test mới cho `linkifyGroundedProducts()` và `parseSafeChatMarkdown()` / XSS allowlist.
-- [ ] `$env:ENABLE_MOCK_OAUTH='true'; $env:GOOGLE_OAUTH_ENABLED='true'; pnpm test:integration` pass 100% (2 lần liên tiếp).
-- [ ] `pnpm --filter @dirtfit/web build && pnpm test:system` pass **7/7** Playwright specs (kèm bước bấm link/thẻ xe trong `04-ai-chatbot-e2e.spec.js`).
-- [ ] `docker compose -f docker-compose.prod.yml up -d --build --wait` + `node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 --expect-prod` trả `"status": "PASSED"`.
+- [x] **0 Prisma migration mới** (xác nhận `git diff apps/api/prisma/` rỗng, `pnpm --filter @dirtfit/api run db:validate` thoát mã `0`).
+- [x] `pnpm check:pure-js && pnpm lint && pnpm format:check` thoát mã `0`.
+- [x] `pnpm test:unit` pass 100% trên cả 5 packages (`< 5s`), bao gồm toàn bộ test mới cho `linkifyGroundedProducts()` và `parseSafeChatMarkdown()` / XSS allowlist.
+- [x] `$env:ENABLE_MOCK_OAUTH='true'; $env:GOOGLE_OAUTH_ENABLED='true'; pnpm test:integration` pass 100% (2 lần liên tiếp).
+- [x] `pnpm --filter @dirtfit/web build && pnpm test:system` pass **7/7** Playwright specs (kèm bước bấm link/thẻ xe trong `04-ai-chatbot-e2e.spec.js`).
+- [x] `docker compose -f docker-compose.prod.yml up -d --build --wait` + `node scripts/smoke-stack.mjs --api-url http://127.0.0.1:4000 --web-url http://127.0.0.1:3000 --expect-prod` trả `"status": "PASSED"`.
 
 ---
 

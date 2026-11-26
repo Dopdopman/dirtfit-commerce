@@ -244,12 +244,26 @@ const KEYWORD_RULES = Object.freeze([
   },
   {
     intent: CHAT_INTENTS.CATALOG_PRICING,
-    docSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+    docSlug: null,
     patterns: [
-      /\b(price|gia ban|gia xe|hoi gia|bao nhieu|cost|stock|ton kho|con hang|available|spec|thong so|engine|phan khoi|cc|dual[- ]?sport|enduro|motocross|adventure|supermoto|catalog|accessories|phu kien|xe nao)\b/i,
+      /\b(price|gia ban|gia xe|hoi gia|bao nhieu|cost|stock|ton kho|con hang|available|spec|thong so|engine|phan khoi|cc|dual[- ]?sport|enduro|motocross|adventure|supermoto|catalog|accessories|phu kien|xe nao|compare|so sanh)\b/i,
     ],
   },
 ]);
+
+const EXPLICIT_POLICY_SIGNAL_REGEX =
+  /\b(deposit|dat coc|coc xe|payos|vietqr|\bcod\b|cash on delivery|thu ho|giu cho|reservation|15 ?min|15 phut|huy don|cancel order|thanh toan|payment|warranty|bao hanh|returns?|doi tra|hoan tien|refund|\bpdi\b|handover|ban giao|giao xe|terms?|dieu khoan|dieu kien|privacy|quyen rieng tu|du lieu ca nhan|bao mat|disclaimer|mien tru|oauth|showroom|test[- ]?ride|lai thu)\b/i;
+
+/**
+ * Detect whether the customer message explicitly asks about ordering policies, warranty, terms,
+ * privacy, or showroom test rides so BM25 policy retrieval stays tightly relevant.
+ * @param {string} message
+ * @returns {boolean}
+ */
+export function hasExplicitPolicySignal(message) {
+  const folded = foldVietnameseText(String(message ?? ''));
+  return EXPLICIT_POLICY_SIGNAL_REGEX.test(folded);
+}
 
 const GENERAL_PURCHASE_PATTERNS = Object.freeze([
   /\b(toi muon mua|minh muon mua|muon mua|can mua|tim mua|mua xe|can tu van|tu van giup|tu van cho|tu van xe|chon xe|gioi thieu xe|shop ban gi|co nhung xe|xem xe|dat xe)\b/i,
@@ -287,6 +301,7 @@ function isPureGreetingMessage(foldedMessage) {
  * @returns {{
  *   intent: string,
  *   preferredDocSlug: string|null,
+ *   hasPolicySignal: boolean,
  *   entities: ReturnType<typeof extractRiderEntities>,
  *   mentionedSlugs: string[],
  * }}
@@ -295,11 +310,13 @@ export function classifyChatIntent(message, catalogBikes = []) {
   const folded = foldVietnameseText(String(message ?? ''));
   const entities = extractRiderEntities(message);
   const mentionedSlugs = extractMentionedBikeSlugs(message, catalogBikes);
+  const hasPolicySignal = hasExplicitPolicySignal(message);
 
   if (entities.hasExplicitDimensions) {
     return {
       intent: CHAT_INTENTS.RIDER_FIT_ADVICE,
       preferredDocSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+      hasPolicySignal,
       entities,
       mentionedSlugs,
     };
@@ -310,6 +327,7 @@ export function classifyChatIntent(message, catalogBikes = []) {
       return {
         intent: rule.intent,
         preferredDocSlug: rule.docSlug,
+        hasPolicySignal,
         entities,
         mentionedSlugs,
       };
@@ -319,7 +337,8 @@ export function classifyChatIntent(message, catalogBikes = []) {
   if (mentionedSlugs.length > 0) {
     return {
       intent: CHAT_INTENTS.CATALOG_PRICING,
-      preferredDocSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+      preferredDocSlug: null,
+      hasPolicySignal,
       entities,
       mentionedSlugs,
     };
@@ -328,7 +347,8 @@ export function classifyChatIntent(message, catalogBikes = []) {
   if (GENERAL_PURCHASE_PATTERNS.some((re) => re.test(folded))) {
     return {
       intent: CHAT_INTENTS.GENERAL_PURCHASE,
-      preferredDocSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+      preferredDocSlug: null,
+      hasPolicySignal,
       entities,
       mentionedSlugs,
     };
@@ -338,6 +358,7 @@ export function classifyChatIntent(message, catalogBikes = []) {
     return {
       intent: CHAT_INTENTS.GREETING,
       preferredDocSlug: null,
+      hasPolicySignal: false,
       entities,
       mentionedSlugs,
     };
@@ -346,6 +367,7 @@ export function classifyChatIntent(message, catalogBikes = []) {
   return {
     intent: CHAT_INTENTS.OUT_OF_SCOPE,
     preferredDocSlug: null,
+    hasPolicySignal: false,
     entities,
     mentionedSlugs,
   };

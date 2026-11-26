@@ -9,6 +9,7 @@ import {
 } from '../../common/inventory/availability.js';
 import { findActiveBikesProjection, findBikeStockMapByIds } from '../catalog/catalog.repository.js';
 import { classifyChatIntent } from './intent-router.js';
+import { extractGroundedAccessories } from './link-grounder.js';
 import { getChatbotPrompts, renderGroundedPrompt } from './prompts/prompt-loader.js';
 
 const DEFAULT_FALLBACK_RIDER = Object.freeze({
@@ -96,6 +97,7 @@ export function evaluateCatalogForRider({
         const baseImpact = c.accessory.ergoImpactJson ?? {};
         return {
           id: c.accessory.id,
+          sku: c.accessory.sku ?? null,
           name: c.accessory.name,
           category: c.accessory.category,
           priceVnd: c.accessory.priceVnd,
@@ -115,6 +117,9 @@ export function evaluateCatalogForRider({
 
     const evalResult = evaluateBikeFit(normalizedRider, bike.geometrySpec, {}, compatibleErgo);
     const bestUpsell = evalResult.upsellSuggestions?.[0] ?? null;
+    const primaryUpsellAcc = bestUpsell?.accessoryIds?.[0]
+      ? compatibleErgo.find((item) => item.id === bestUpsell.accessoryIds[0])
+      : null;
     const recommendedLoweringMm = bestUpsell
       ? Math.max(0, Math.round(bestUpsell.beforeSeatHeightMm - bestUpsell.afterSeatHeightMm))
       : 0;
@@ -122,14 +127,18 @@ export function evaluateCatalogForRider({
 
     return {
       _mentionBoost: mentionedSet.has(bike.slug) ? 1 : 0,
+      cardMode: 'FIT',
       id: bike.id,
       slug: bike.slug,
       name: bike.name,
+      brand: bike.brand?.name ?? null,
       brandName: bike.brand?.name ?? null,
       category: bike.category,
+      engineCc: bike.engineCc ?? null,
       coverImageUrl: bike.coverImageUrl ?? resolvedMedia.coverImageUrl,
       commercialImageUrl: bike.commercialImageUrl ?? resolvedMedia.commercialImageUrl,
       coverImageKind: bike.coverImageKind ?? resolvedMedia.commercialImageKind,
+      seatHeightMm: bike.geometrySpec.unladenSeatHeightMm,
       unladenSeatHeightMm: bike.geometrySpec.unladenSeatHeightMm,
       effectiveSeatHeightMm: evalResult.sag.effectiveSeatHeightMm,
       riderSagMm: evalResult.sag.totalRearSagMm,
@@ -139,9 +148,12 @@ export function evaluateCatalogForRider({
       depositAmountVnd: toSafeVndNumber(bike.depositAmountVnd, 'depositAmountVnd'),
       availableQty: Number(bike.availableQty ?? bike.stockQty ?? 0),
       recommendedLoweringMm,
+      loweringAccessorySku: primaryUpsellAcc?.sku ?? null,
+      loweringAccessoryName: primaryUpsellAcc?.name ?? null,
       loweringTip: bestUpsell
         ? `${bestUpsell.title} (${bestUpsell.afterSeatHeightMm}mm · ${bestUpsell.afterContactStatus})`
         : null,
+      productUrl: `/bikes/${bike.slug}`,
       simulatorUrl: buildSimulatorUrl(bike.slug, normalizedRider),
     };
   });
@@ -193,6 +205,45 @@ async function loadLiveCatalogBikes(app) {
   });
 }
 
+/**
+ * Build structured compact catalog recommendation cards for purchase, pricing, and comparison intents.
+ * @param {Array<object>} bikes
+ * @param {number} [maxResults]
+ * @returns {Array<object>}
+ */
+export function buildCatalogRecommendationCards(bikes, maxResults = 4) {
+  if (!Array.isArray(bikes) || bikes.length === 0) {
+    return [];
+  }
+
+  return bikes
+    .filter((b) => Boolean(b?.slug && b?.name))
+    .slice(0, maxResults)
+    .map((bike) => {
+      const resolvedMedia = resolveBikeMedia(bike.media);
+      const seatMm = bike.geometrySpec?.unladenSeatHeightMm ?? null;
+      return {
+        cardMode: 'CATALOG',
+        id: bike.id,
+        slug: bike.slug,
+        name: bike.name,
+        brand: bike.brand?.name ?? null,
+        brandName: bike.brand?.name ?? null,
+        category: bike.category,
+        engineCc: bike.engineCc ?? null,
+        seatHeightMm: seatMm,
+        unladenSeatHeightMm: seatMm,
+        priceVnd: toSafeVndNumber(bike.priceVnd, 'priceVnd'),
+        depositAmountVnd: toSafeVndNumber(bike.depositAmountVnd, 'depositAmountVnd'),
+        availableQty: Number(bike.availableQty ?? bike.stockQty ?? 0),
+        coverImageUrl: bike.coverImageUrl ?? resolvedMedia.coverImageUrl,
+        commercialImageUrl: bike.commercialImageUrl ?? resolvedMedia.commercialImageUrl,
+        coverImageKind: bike.coverImageKind ?? resolvedMedia.commercialImageKind,
+        productUrl: `/bikes/${bike.slug}`,
+      };
+    });
+}
+
 function selectRepresentativeBikes(liveBikes, maxCount = 4) {
   if (!Array.isArray(liveBikes) || liveBikes.length === 0) {
     return [];
@@ -220,16 +271,41 @@ function selectRepresentativeBikes(liveBikes, maxCount = 4) {
 }
 
 /**
- * Resolve relevant knowledge base chunks and grounded policy citations without hallucinating URLs.
+ * Resolve relevant knowledge base chunks and grounded policy citations without pulling noisy sections.
  * @param {string} message
  * @param {'en'|'vi'} locale
  * @param {string} intent
  * @param {string|null} preferredDocSlug
+ * @param {boolean} hasPolicySignal
  * @returns {Array<object>}
  */
-function retrieveGroundedPolicyChunks(message, locale, intent, preferredDocSlug) {
+function retrieveGroundedPolicyChunks(message, locale, intent, preferredDocSlug, hasPolicySignal) {
   if (intent === CHAT_INTENTS.OUT_OF_SCOPE || intent === CHAT_INTENTS.GREETING) {
     return [];
+  }
+
+  if (intent === CHAT_INTENTS.GENERAL_PURCHASE || intent === CHAT_INTENTS.CATALOG_PRICING) {
+    if (!hasPolicySignal) {
+      return [];
+    }
+    return searchKnowledge(message, {
+      locale,
+      topK: 2,
+      minScore: 0.35,
+    });
+  }
+
+  if (intent === CHAT_INTENTS.RIDER_FIT_ADVICE) {
+    const chunks = searchKnowledge(message, {
+      locale,
+      topK: 4,
+      minScore: 0.15,
+      preferredDocSlug: POLICY_DOC_SLUGS.RIDER_FIT_FAQ,
+    });
+    if (!hasPolicySignal) {
+      return chunks.filter((c) => c.docSlug === POLICY_DOC_SLUGS.RIDER_FIT_FAQ).slice(0, 3);
+    }
+    return chunks.slice(0, 3);
   }
 
   let chunks = searchKnowledge(message, {
@@ -294,6 +370,23 @@ function buildStructuredCitations(chunks, recommendedBikes, catalogMatches, inte
     });
   }
 
+  if (
+    intent === CHAT_INTENTS.RIDER_FIT_ADVICE &&
+    !seenUrls.has('/policies/terms#ergonomics-disclaimer')
+  ) {
+    const termsDoc = getPolicyDocument(POLICY_DOC_SLUGS.TERMS_AND_CONDITIONS, locale);
+    const ergoSection = termsDoc.sections.find((s) => s.sectionId === 'ergonomics-disclaimer');
+    if (ergoSection && !seenUrls.has(ergoSection.url)) {
+      seenUrls.add(ergoSection.url);
+      citations.push({
+        id: ergoSection.sectionId,
+        title: ergoSection.title,
+        section: ergoSection.heading,
+        url: ergoSection.url,
+      });
+    }
+  }
+
   for (const bike of [...recommendedBikes, ...catalogMatches].slice(0, 3)) {
     const cleanUrl = `/bikes/${bike.slug}`;
     if (!seenUrls.has(cleanUrl)) {
@@ -307,20 +400,15 @@ function buildStructuredCitations(chunks, recommendedBikes, catalogMatches, inte
     }
   }
 
-  if (
-    intent === CHAT_INTENTS.RIDER_FIT_ADVICE &&
-    !seenUrls.has('/policies/terms#ergo-disclaimer')
-  ) {
-    const termsDoc = getPolicyDocument(POLICY_DOC_SLUGS.TERMS_AND_CONDITIONS, locale);
-    const ergoSection =
-      termsDoc.sections.find((s) => s.sectionId === 'ergo-disclaimer') ?? termsDoc.sections[0];
-    if (ergoSection && !seenUrls.has(ergoSection.url)) {
-      seenUrls.add(ergoSection.url);
+  if (catalogMatches.length >= 2) {
+    const compareUrl = `/compare?bikeA=${encodeURIComponent(catalogMatches[0].slug)}&bikeB=${encodeURIComponent(catalogMatches[1].slug)}`;
+    if (!seenUrls.has(compareUrl)) {
+      seenUrls.add(compareUrl);
       citations.push({
-        id: ergoSection.sectionId,
-        title: ergoSection.title,
-        section: ergoSection.heading,
-        url: ergoSection.url,
+        id: 'compare-2d',
+        title: locale === 'vi' ? 'So sánh 2D Ghost Overlay' : '2D Ghost Overlay Compare',
+        section: `${catalogMatches[0].name} vs ${catalogMatches[1].name}`,
+        url: compareUrl,
       });
     }
   }
@@ -349,14 +437,16 @@ export async function buildGroundedChatContext({
 }) {
   const safeLocale = locale === 'vi' ? 'vi' : 'en';
   const liveBikes = await loadLiveCatalogBikes(app);
+  const groundedAccessories = extractGroundedAccessories(liveBikes);
   const classification = classifyChatIntent(message, liveBikes);
-  const { intent, preferredDocSlug, entities, mentionedSlugs } = classification;
+  const { intent, preferredDocSlug, hasPolicySignal, entities, mentionedSlugs } = classification;
 
   const retrievedChunks = retrieveGroundedPolicyChunks(
     message,
     safeLocale,
     intent,
-    preferredDocSlug
+    preferredDocSlug,
+    hasPolicySignal
   );
 
   // Resolve rider profile from message dimensions, explicit input, or user's default body profile
@@ -422,6 +512,20 @@ export async function buildGroundedChatContext({
     }
   }
 
+  let matchedCatalogBikes = [];
+  if (intent !== CHAT_INTENTS.GREETING && intent !== CHAT_INTENTS.OUT_OF_SCOPE) {
+    if (mentionedSlugs.length > 0) {
+      const slugSet = new Set(mentionedSlugs);
+      matchedCatalogBikes = liveBikes.filter((b) => slugSet.has(b.slug));
+    } else if (entities.category) {
+      matchedCatalogBikes = liveBikes.filter((b) => b.category === entities.category).slice(0, 4);
+    } else if (intent === CHAT_INTENTS.CATALOG_PRICING) {
+      matchedCatalogBikes = selectRepresentativeBikes(liveBikes, 4);
+    } else if (intent === CHAT_INTENTS.GENERAL_PURCHASE) {
+      matchedCatalogBikes = selectRepresentativeBikes(liveBikes, 4);
+    }
+  }
+
   const recommendedBikes = effectiveRiderProfile
     ? evaluateCatalogForRider({
         bikes: liveBikes,
@@ -430,21 +534,16 @@ export async function buildGroundedChatContext({
         mentionedSlugs,
         maxResults: 3,
       })
-    : [];
-
-  let matchedCatalogBikes = [];
-  if (intent !== CHAT_INTENTS.GREETING) {
-    if (mentionedSlugs.length > 0) {
-      const slugSet = new Set(mentionedSlugs);
-      matchedCatalogBikes = liveBikes.filter((b) => slugSet.has(b.slug));
-    } else if (entities.category) {
-      matchedCatalogBikes = liveBikes.filter((b) => b.category === entities.category).slice(0, 4);
-    } else if (intent === CHAT_INTENTS.CATALOG_PRICING) {
-      matchedCatalogBikes = liveBikes.slice(0, 5);
-    } else if (intent === CHAT_INTENTS.GENERAL_PURCHASE) {
-      matchedCatalogBikes = selectRepresentativeBikes(liveBikes, 4);
-    }
-  }
+    : intent === CHAT_INTENTS.GENERAL_PURCHASE ||
+        intent === CHAT_INTENTS.CATALOG_PRICING ||
+        mentionedSlugs.length > 0
+      ? buildCatalogRecommendationCards(
+          matchedCatalogBikes.length > 0
+            ? matchedCatalogBikes
+            : selectRepresentativeBikes(liveBikes, 4),
+          4
+        )
+      : [];
 
   // Scoped recent orders for ORDER_STATUS_HELP (strictly anti-IDOR, zero PII sent to LLM)
   let scopedOrders = [];
@@ -495,7 +594,13 @@ export async function buildGroundedChatContext({
 
   const catalogLines = liveBikes.slice(0, 8).map((bike) => {
     const unladen = bike.geometrySpec?.unladenSeatHeightMm ?? 'N/A';
-    return `- ${bike.name} (slug: ${bike.slug}, category: ${bike.category}, unladenSeatMm: ${unladen}mm, price: ${formatPromptVnd(bike.priceVnd)}, deposit: ${formatPromptVnd(bike.depositAmountVnd)}, availableQty: ${bike.availableQty})`;
+    const topAccessories = (bike.compatibilities ?? [])
+      .filter((c) => c.accessory?.sku && c.accessory?.name && c.accessory?.status === 'ACTIVE')
+      .slice(0, 2)
+      .map((c) => `${c.accessory.name} (sku: ${c.accessory.sku})`);
+    const accSuffix =
+      topAccessories.length > 0 ? `, accessories: [${topAccessories.join('; ')}]` : '';
+    return `- ${bike.name} (slug: ${bike.slug}, category: ${bike.category}, unladenSeatMm: ${unladen}mm, price: ${formatPromptVnd(bike.priceVnd)}, deposit: ${formatPromptVnd(bike.depositAmountVnd)}, availableQty: ${bike.availableQty}${accSuffix})`;
   });
 
   if (intent === CHAT_INTENTS.SHOWROOM_TEST_RIDE) {
@@ -510,7 +615,7 @@ export async function buildGroundedChatContext({
   const liveCatalogText = catalogLines.join('\n') || 'Catalog temporarily empty.';
 
   const ergonomicsText =
-    recommendedBikes.length > 0
+    effectiveRiderProfile && recommendedBikes.length > 0
       ? JSON.stringify({
           riderProfile: {
             heightCm: effectiveRiderProfile.heightCm,
@@ -543,6 +648,7 @@ export async function buildGroundedChatContext({
   return {
     intent,
     locale: safeLocale,
+    hasPolicySignal,
     entities,
     userId,
     retrievedChunks,
@@ -550,6 +656,7 @@ export async function buildGroundedChatContext({
     recommendedBikes,
     matchedCatalogBikes,
     liveBikes,
+    groundedAccessories,
     effectiveRiderProfile,
     scopedOrders,
     renderedPrompt,

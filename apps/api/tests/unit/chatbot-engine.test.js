@@ -13,8 +13,10 @@ import {
 import {
   classifyChatIntent,
   extractRiderEntities,
+  hasExplicitPolicySignal,
   resolveEffectiveLocale,
 } from '../../src/modules/chatbot/intent-router.js';
+import { linkifyGroundedProducts } from '../../src/modules/chatbot/link-grounder.js';
 
 const MOCK_BIKES = [
   {
@@ -171,6 +173,12 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     expect(resolveEffectiveLocale('How do deposits work?', 'vi')).toBe('en');
     expect(resolveEffectiveLocale('Honda CRF300L', 'en')).toBe('en');
     expect(resolveEffectiveLocale('Honda CRF300L', 'vi')).toBe('vi');
+
+    expect(hasExplicitPolicySignal('tôi muốn mua xe')).toBe(false);
+    expect(hasExplicitPolicySignal('giá KTM 350 EXC-F')).toBe(false);
+    expect(hasExplicitPolicySignal('Mua xe đặt cọc bao lâu?')).toBe(true);
+    expect(hasExplicitPolicySignal('Chính sách bảo mật dữ liệu')).toBe(true);
+    expect(hasExplicitPolicySignal('Xe được bảo hành bao lâu?')).toBe(true);
   });
 
   it('produces exact numerical parity with @dirtfit/ergonomics-engine evaluateBikeFit()', () => {
@@ -200,11 +208,61 @@ describe('Phase 11 Unit Tests — Chatbot Engine Pure Logic Layer', () => {
     ]);
 
     expect(recommended).toHaveLength(1);
+    expect(recommended[0].cardMode).toBe('FIT');
+    expect(recommended[0].productUrl).toBe('/bikes/honda-crf300l');
     expect(recommended[0].effectiveSeatHeightMm).toBe(directEval.sag.effectiveSeatHeightMm);
     expect(recommended[0].riderSagMm).toBe(directEval.sag.totalRearSagMm);
     expect(recommended[0].contactStatus).toBe(directEval.footContact.contactStatus);
     expect(recommended[0].fitScore).toBe(directEval.fitScore);
     expect(recommended[0].simulatorUrl).toBe('/bikes/honda-crf300l?heightCm=165&weightKg=60');
+  });
+
+  it('validates, repairs, strips hallucinated/unsafe links, and safely auto-links grounded bikes longest-first', () => {
+    const bikesForLinker = [
+      ...MOCK_BIKES,
+      {
+        id: '00000000-0000-4000-8000-000000000002',
+        slug: 'honda-crf300l-rally',
+        name: 'Honda CRF300L Rally',
+        compatibilities: [],
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000003',
+        slug: 'yamaha-tenere-700',
+        name: 'Yamaha Ténéré 700',
+        compatibilities: [],
+      },
+    ];
+    const accessoriesForLinker = [
+      {
+        id: '00000000-0000-4000-8000-000000000201',
+        sku: 'ACC-ZETA-LINK-30',
+        name: 'Zeta Lowering Link -30mm',
+      },
+    ];
+
+    const rawAnswer = [
+      'Check Honda CRF300L Rally and Yamaha Tenere 700 plus Zeta Lowering Link -30mm.',
+      'Second mention of Honda CRF300L Rally stays plain and `Honda CRF300L` in code stays untouched.',
+      'Wrong slug repair: [Honda CRF300L](/bikes/wrong-slug).',
+      'Fake bike stripped: [Yamaha YZ999](/bikes/yamaha-yz999).',
+      'Malicious stripped: [Evil](https://evil.com) [XSS](javascript:alert(1)) [Admin](/admin/bikes).',
+    ].join('\n');
+
+    const grounded = linkifyGroundedProducts(rawAnswer, bikesForLinker, accessoriesForLinker);
+
+    expect(grounded).toContain('[Honda CRF300L Rally](/bikes/honda-crf300l-rally)');
+    expect(grounded).toContain('[Yamaha Tenere 700](/bikes/yamaha-tenere-700)');
+    expect(grounded).toContain('[Zeta Lowering Link -30mm](/accessories?sku=ACC-ZETA-LINK-30)');
+    expect(grounded).toContain('Second mention of Honda CRF300L Rally stays plain');
+    expect(grounded).toContain('`Honda CRF300L` in code stays untouched');
+    expect(grounded).toContain('Wrong slug repair: [Honda CRF300L](/bikes/honda-crf300l).');
+    expect(grounded).toContain('Fake bike stripped: Yamaha YZ999.');
+    expect(grounded).not.toContain('/bikes/yamaha-yz999');
+    expect(grounded).not.toContain('https://evil.com');
+    expect(grounded).not.toContain('javascript:alert(1)');
+    expect(grounded).not.toContain('/admin/bikes');
+    expect(grounded).toContain('Evil XSS Admin.');
   });
 
   it('sends Gemini API key strictly in x-goog-api-key header, retries once on 503, and falls back smoothly on 429', async () => {

@@ -1,17 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Wrench } from 'lucide-react';
+import ProductThumbnail from '@/components/ui/ProductThumbnail';
 import { isSafeInternalUrl } from '@/lib/chat-markdown';
 import { formatMm, formatVnd, getCategoryLabel, getFitStatusMeta } from '@/lib/formatters';
-import { resolveClientMediaUrl } from '@/lib/media-helpers';
 import { useI18n } from '@/providers/I18nProvider';
 
 /**
  * Technical Mini Rider-Fit Recommendation Card inside Chatbot Drawer.
  * Uses exact numbers computed by `@dirtfit/ergonomics-engine` and links directly to 2D Simulator.
- * Displays an optional compact real photo thumbnail when `bike.coverImageUrl` is live.
+ * Reuses ProductThumbnail (real photo or crisp CAD wireframe fallback).
  * @param {object} props
  * @param {object} props.bike
  * @param {() => void} [props.onNavigate]
@@ -21,31 +20,21 @@ export default function MiniFitCard({ bike, onNavigate }) {
   const { locale, t } = useI18n();
   const fitMeta = getFitStatusMeta(bike.contactStatus, locale);
   const safeHref = isSafeInternalUrl(bike.simulatorUrl) ? bike.simulatorUrl : `/bikes/${bike.slug}`;
-  const thumbUrl = resolveClientMediaUrl(bike.coverImageUrl || bike.commercialImageUrl);
-  const [imgFailed, setImgFailed] = useState(false);
-
-  useEffect(() => {
-    setImgFailed(false);
-  }, [thumbUrl]);
+  const brandLabel = bike.brandName || bike.brand || null;
 
   return (
     <div className="rounded-sm border border-line bg-canvas p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
-          {thumbUrl && !imgFailed && (
-            <div className="h-10 w-14 shrink-0 overflow-hidden rounded-sm border border-line bg-surface">
-              <img
-                src={thumbUrl}
-                alt={bike.name}
-                loading="lazy"
-                onError={() => setImgFailed(true)}
-                className="h-full w-full object-cover"
-              />
-            </div>
-          )}
+          <ProductThumbnail
+            itemType="BIKE"
+            src={bike.coverImageUrl || bike.commercialImageUrl}
+            alt={bike.name}
+            size="xs"
+          />
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-              {bike.brandName ? `${bike.brandName} · ` : ''}
+              {brandLabel ? `${brandLabel} · ` : ''}
               {getCategoryLabel(bike.category, locale)}
             </div>
             <div className="mt-0.5 truncate text-sm font-bold text-ink">{bike.name}</div>

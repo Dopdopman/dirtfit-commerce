@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Check, Copy, MessageSquare, RotateCcw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import CompactBikeCard from '@/components/chat/CompactBikeCard';
 import MiniFitCard from '@/components/chat/MiniFitCard';
 import SafeChatMessage from '@/components/chat/SafeChatMessage';
 import { apiRequest, ApiError } from '@/lib/api-client';
@@ -188,6 +189,12 @@ export default function SupportChatWidget() {
 
   const remainingChars = 1000 - inputText.length;
 
+  const handleInlineLinkNavigate = useCallback(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsOpen(false);
+    }
+  }, []);
+
   return (
     <>
       {!isOpen && (
@@ -299,25 +306,41 @@ export default function SupportChatWidget() {
                 );
               }
 
-              const safeCitations = (msg.citations ?? []).filter((c) => isSafeInternalUrl(c?.url));
               const recs = Array.isArray(msg.recommendedBikes) ? msg.recommendedBikes : [];
+              const renderedBikeUrls = new Set(recs.map((b) => `/bikes/${b.slug}`));
+              const safeCitations = (msg.citations ?? []).filter(
+                (c) =>
+                  isSafeInternalUrl(c?.url) &&
+                  !(String(c?.id ?? '').startsWith('bike:') && renderedBikeUrls.has(c.url))
+              );
 
               return (
                 <div
                   key={msg.id}
                   className="space-y-2.5 rounded-sm border border-line bg-surface p-3.5"
                 >
-                  <SafeChatMessage content={msg.content} />
+                  <SafeChatMessage content={msg.content} onNavigate={handleInlineLinkNavigate} />
 
                   {recs.length > 0 && (
-                    <div className="space-y-2 pt-1">
-                      {recs.map((bike) => (
-                        <MiniFitCard
-                          key={`${msg.id}-${bike.slug}`}
-                          bike={bike}
-                          onNavigate={() => setIsOpen(false)}
-                        />
-                      ))}
+                    <div className="space-y-1.5 pt-1">
+                      {recs.map((bike) => {
+                        const isFitCard =
+                          bike?.cardMode === 'FIT' ||
+                          typeof bike?.effectiveSeatHeightMm === 'number';
+                        return isFitCard ? (
+                          <MiniFitCard
+                            key={`${msg.id}-${bike.slug}`}
+                            bike={bike}
+                            onNavigate={() => setIsOpen(false)}
+                          />
+                        ) : (
+                          <CompactBikeCard
+                            key={`${msg.id}-${bike.slug}`}
+                            bike={bike}
+                            onNavigate={() => setIsOpen(false)}
+                          />
+                        );
+                      })}
                     </div>
                   )}
 

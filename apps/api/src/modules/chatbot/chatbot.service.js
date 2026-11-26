@@ -7,6 +7,7 @@ import {
   sanitizeChatInput,
 } from './injection-guard.js';
 import { resolveEffectiveLocale } from './intent-router.js';
+import { linkifyGroundedProducts } from './link-grounder.js';
 import {
   createChatSession,
   deleteOwnedChatSessions,
@@ -149,6 +150,11 @@ export async function sendChatMessage(app, owner, payload) {
 
   const adapter = resolveChatAdapter(app.env, app.log);
   const adapterResult = await adapter.generate(groundedContext);
+  const groundedContent = linkifyGroundedProducts(
+    adapterResult.content,
+    groundedContext.liveBikes,
+    groundedContext.groundedAccessories
+  );
   const latencyMs = Math.max(1, Date.now() - startedAt);
 
   const persisted = await persistChatTurn(app.prisma, {
@@ -158,7 +164,7 @@ export async function sendChatMessage(app, owner, payload) {
     userContent: cleanedMessage,
     userIntent: groundedContext.intent,
     assistantPayload: {
-      content: adapterResult.content,
+      content: groundedContent,
       intent: groundedContext.intent,
       citations: groundedContext.citations,
       recommendedBikes: groundedContext.recommendedBikes,
